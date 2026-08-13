@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline Student Calendar & Planner</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #2563eb;
+      --accent-2: #1d4ed8;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px 24px;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+    .header h1 { margin: 0 0 6px; font-size: 1.45rem; }
+    .header p { margin: 0; opacity: 0.95; }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .tab-btn {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .grid-2 {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 340px 1fr;
+    }
+    @media (max-width: 900px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    h2, h3 { margin-top: 0; }
+    .muted { color: var(--muted); }
+
+    .form-row { margin-bottom: 10px; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; }
+    input, select, button {
+      font: inherit;
+    }
+    input[type="text"], input[type="number"], input[type="date"], input[type="url"], select {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 10px 11px;
+      background: #fff;
+      color: var(--text);
+    }
+    input[type="color"] {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      height: 42px;
+      padding: 4px;
+      background: #fff;
+    }
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn:hover { background: var(--accent-2); }
+    .btn.secondary {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+    .btn.danger { background: var(--danger); }
+
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .pill.assignment { background: #dbeafe; color: #1d4ed8; }
+    .pill.test { background: #fee2e2; color: #b91c1c; }
+
+    .class-item, .todo-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fff;
+      display: grid;
+      gap: 8px;
+    }
+    .class-head, .todo-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .tiny-btn {
+      border: none;
+      background: transparent;
+      color: var(--danger);
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .calendar-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+    .dow {
+      text-align: center;
+      font-weight: 700;
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding: 4px;
+    }
+    .day {
+      min-height: 115px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 6px;
+      display: grid;
+      gap: 5px;
+      align-content: start;
+    }
+    .day.outside { opacity: 0.45; }
+    .day-number {
+      font-weight: 700;
+      font-size: 0.88rem;
+    }
+    .task-chip {
+      border-radius: 8px;
+      padding: 5px;
+      font-size: 0.78rem;
+      border-left: 4px solid transparent;
+      background: #f8fafc;
+      display: grid;
+      gap: 3px;
+    }
+    .task-chip label, .todo-line label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      font-weight: 500;
+      line-height: 1.25;
+    }
+    .task-chip .title.done,
+    .todo-item .title.done {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+    .link-btn {
+      text-decoration: none;
+      font-size: 0.85rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+    details summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 24, 39, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 50;
+    }
+    .modal.open { display: flex; }
+    .modal-content {
+      width: min(520px, 100%);
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .empty {
+      border: 1px dashed #cbd5e1;
+      color: var(--muted);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>Offline High School Student Calendar & Planner</h1>
+      <p>Everything saves in your browser using localStorage. No internet needed.</p>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="classes">Classes</button>
+      <button class="tab-btn" data-tab="tasks">Assignments & Tests</button>
+      <button class="tab-btn" data-tab="calendar">Calendar</button>
+      <button class="tab-btn" data-tab="todo">To-Do</button>
+    </nav>
+
+    <section id="view-classes" class="view active">
+      <div class="grid-2">
+        <div class="card">
+          <h2>Class & Period Setup</h2>
+          <div class="form-row">
+            <label for="className">Class Name</label>
+            <input id="className" type="text" placeholder="e.g., Algebra II" />
+          </div>
+          <div class="form-row">
+            <label for="classPeriod">Period Number</label>
+            <input id="classPeriod" type="number" min="1" placeholder="e.g., 1" />
+          </div>
+          <div class="form-row">
+            <label for="classColor">Color Accent</label>
+            <input id="classColor" type="color" value="#2563eb" />
+          </div>
+          <button class="btn" id="addClassBtn">Add Class</button>
+        </div>
+        <div class="card">
+          <h3>Saved Classes</h3>
+          <div id="classList" class="list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-tasks" class="view">
+      <div class="card">
+        <div class="todo-head">
+          <div>
+            <h2 style="margin-bottom:4px;">Assignment & Test Management</h2>
+            <div class="muted">Add and manage due work.</div>
+          </div>
+          <button class="btn" id="openTaskModalBtn">+ New Task</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <h3>All Tasks</h3>
+        <div id="taskList" class="list"></div>
+      </div>
+    </section>
+
+    <section id="view-calendar" class="view">
+      <div class="card">
+        <div class="calendar-controls">
+          <button class="btn secondary" id="prevMonthBtn">◀</button>
+          <h2 id="monthLabel" style="margin:0;"></h2>
+          <button class="btn secondary" id="nextMonthBtn">▶</button>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+      </div>
+    </section>
+
+    <section id="view-todo" class="view">
+      <div class="card">
+        <h2>Prioritized To-Do List</h2>
+        <p class="muted">Incomplete tasks are automatically sorted by earliest due date.</p>
+        <div id="activeTodoList" class="list"></div>
+        <details style="margin-top:14px;">
+          <summary>Completed</summary>
+          <div id="completedTodoList" class="list"></div>
+        </details>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal" id="taskModal" aria-hidden="true">
+    <div class="modal-content">
+      <div class="todo-head" style="margin-bottom:8px;">
+        <h3 style="margin:0;">Add Assignment or Test</h3>
+        <button class="btn secondary" id="closeTaskModalBtn">Close</button>
+      </div>
+      <div class="form-row">
+        <label for="taskTitle">Title</label>
+        <input id="taskTitle" type="text" placeholder="Read Ch. 4" />
+      </div>
+      <div class="form-row">
+        <label for="taskType">Type</label>
+        <select id="taskType">
+          <option value="assignment">Assignment</option>
+          <option value="test">Test</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label for="taskClass">Class</label>
+        <select id="taskClass"></select>
+      </div>
+      <div class="form-row">
+        <label for="taskDueDate">Due Date</label>
+        <input id="taskDueDate" type="date" />
+      </div>
+      <div class="form-row">
+        <label for="taskLink">Resource Link (optional)</label>
+        <input id="taskLink" type="url" placeholder="https://..." />
+      </div>
+      <button class="btn" id="addTaskBtn">Save Task</button>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "studentPlannerDataV1";
+
+    const state = {
+      classes: [],
+      tasks: [],
+      viewDate: (() => {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth(), 1);
+      })()
+    };
+
+    const els = {
+      tabs: Array.from(document.querySelectorAll(".tab-btn")),
+      views: {
+        classes: document.getElementById("view-classes"),
+        tasks: document.getElementById("view-tasks"),
+        calendar: document.getElementById("view-calendar"),
+        todo: document.getElementById("view-todo")
+      },
+      className: document.getElementById("className"),
+      classPeriod: document.getElementById("classPeriod"),
+      classColor: document.getElementById("classColor"),
+      addClassBtn: document.getElementById("addClassBtn"),
+      classList: document.getElementById("classList"),
+
+      openTaskModalBtn: document.getElementById("openTaskModalBtn"),
+      closeTaskModalBtn: document.getElementById("closeTaskModalBtn"),
+      taskModal: document.getElementById("taskModal"),
+      taskTitle: document.getElementById("taskTitle"),
+      taskType: document.getElementById("taskType"),
+      taskClass: document.getElementById("taskClass"),
+      taskDueDate: document.getElementById("taskDueDate"),
+      taskLink: document.getElementById("taskLink"),
+      addTaskBtn: document.getElementById("addTaskBtn"),
+      taskList: document.getElementById("taskList"),
+
+      monthLabel: document.getElementById("monthLabel"),
+      calendarGrid: document.getElementById("calendarGrid"),
+      prevMonthBtn: document.getElementById("prevMonthBtn"),
+      nextMonthBtn: document.getElementById("nextMonthBtn"),
+
+      activeTodoList: document.getElementById("activeTodoList"),
+      completedTodoList: document.getElementById("completedTodoList")
+    };
+
+    function uid(prefix) {
+      return prefix + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    }
+
+    function esc(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function localDateKey(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+
+    function formatDate(dateStr) {
+      const d = new Date(dateStr + "T00:00:00");
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    }
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ classes: state.classes, tasks: state.tasks }));
+    }
+
+    function load() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.classes)) state.classes = parsed.classes;
+        if (Array.isArray(parsed.tasks)) state.tasks = parsed.tasks;
+      } catch {}
+    }
+
+    function classById(id) {
+      return state.classes.find(c => c.id === id);
+    }
+
+    function tasksSorted() {
+      return [...state.tasks].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    }
+
+    function switchTab(tab) {
+      els.tabs.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tab));
+      Object.entries(els.views).forEach(([name, view]) => {
+        view.classList.toggle("active", name === tab);
+      });
+    }
+
+    function renderClassDropdown() {
+      if (!state.classes.length) {
+        els.taskClass.innerHTML = '<option value="">No classes yet — add a class first</option>';
+        els.taskClass.disabled = true;
+        els.addTaskBtn.disabled = true;
+      } else {
+        els.taskClass.disabled = false;
+        els.addTaskBtn.disabled = false;
+        els.taskClass.innerHTML = state.classes
+          .sort((a, b) => Number(a.period) - Number(b.period))
+          .map(c => `<option value="${esc(c.id)}">${esc(c.name)} (Period ${esc(c.period)})</option>`)
+          .join("");
+      }
+    }
+
+    function renderClasses() {
+      if (!state.classes.length) {
+        els.classList.innerHTML = '<div class="empty">No classes yet.</div>';
+        renderClassDropdown();
+        return;
+      }
+      els.classList.innerHTML = state.classes
+        .sort((a, b) => Number(a.period) - Number(b.period))
+        .map(c => `
+          <div class="class-item">
+            <div class="class-head">
+              <div><strong>${esc(c.name)}</strong> · Period ${esc(c.period)}</div>
+              <button class="tiny-btn" data-delete-class="${esc(c.id)}">Remove</button>
+            </div>
+            <div class="meta">Color Accent</div>
+            <div style="height:12px; border-radius:999px; background:${c.color};"></div>
+          </div>
+        `)
+        .join("");
+      renderClassDropdown();
+    }
+
+    function linkHtml(url) {
+      return url ? `<a class="link-btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Open resource">🔗</a>` : "";
+    }
+
+    function renderTaskManagerList() {
+      const sorted = tasksSorted();
+      if (!sorted.length) {
+        els.taskList.innerHTML = '<div class="empty">No tasks yet.</div>';
+        return;
+      }
+      els.taskList.innerHTML = sorted.map(t => {
+        const cls = classById(t.classId);
+        const titleClass = t.completed ? "title done" : "title";
+        return `
+          <div class="todo-item" style="border-left:6px solid ${cls ? cls.color : "#d1d5db"};">
+            <div class="todo-head">
+              <div>
+                <span class="pill ${t.type}">${t.type === "test" ? "Test" : "Assignment"}</span>
+                <strong class="${titleClass}">${esc(t.title)}</strong>
+              </div>
+              ${linkHtml(t.link)}
+            </div>
+            <div class="meta">${cls ? esc(cls.name) : "Unknown Class"} · Period ${cls ? esc(cls.period) : "-"} · Due ${formatDate(t.dueDate)}</div>
+            <label class="todo-line"><input type="checkbox" data-toggle-task="${esc(t.id)}" ${t.completed ? "checked" : ""}/> Complete</label>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderCalendar() {
+      const year = state.viewDate.getFullYear();
+      const month = state.viewDate.getMonth();
+      els.monthLabel.textContent = state.viewDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+      const first = new Date(year, month, 1);
+      const startOffset = first.getDay();
+      const start = new Date(year, month, 1 - startOffset);
+
+      const dows = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const cells = [];
+      dows.forEach(d => cells.push(`<div class="dow">${d}</div>`));
+
+      for (let i = 0; i < 42; i++) {
+        const current = new Date(start);
+        current.setDate(start.getDate() + i);
+        const currentDate = localDateKey(current);
+        const inMonth = current.getMonth() === month;
+
+        const dayTasks = state.tasks
+          .filter(t => t.dueDate === currentDate)
+          .sort((a, b) => (a.completed === b.completed ? 0 : a.completed ? 1 : -1));
+
+        const chips = dayTasks.map(t => {
+          const cls = classById(t.classId);
+          const titleClass = t.completed ? "title done" : "title";
+          return `
+            <div class="task-chip" style="border-left-color:${cls ? cls.color : "#cbd5e1"};">
+              <label>
+                <input type="checkbox" data-toggle-task="${esc(t.id)}" ${t.completed ? "checked" : ""} />
+                <span class="${titleClass}">${esc(t.title)}</span>
+              </label>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                <span class="pill ${t.type}">${t.type === "test" ? "T" : "A"}</span>
+                ${linkHtml(t.link)}
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        cells.push(`
+          <div class="day ${inMonth ? "" : "outside"}">
+            <div class="day-number">${current.getDate()}</div>
+            ${chips}
+          </div>
+        `);
+      }
+      els.calendarGrid.innerHTML = cells.join("");
+    }
+
+    function renderTodo() {
+      const sorted = tasksSorted();
+      const active = sorted.filter(t => !t.completed);
+      const completed = sorted.filter(t => t.completed);
+
+      function item(t) {
+        const cls = classById(t.classId);
+        const titleClass = t.completed ? "title done" : "title";
+        return `
+          <div class="todo-item" style="border-left:6px solid ${cls ? cls.color : "#d1d5db"};">
+            <div class="todo-head">
+              <div>
+                <span class="pill ${t.type}">${t.type === "test" ? "Test" : "Assignment"}</span>
+                <strong class="${titleClass}">${esc(t.title)}</strong>
+              </div>
+              ${linkHtml(t.link)}
+            </div>
+            <div class="meta">${cls ? esc(cls.name) : "Unknown Class"} · Period ${cls ? esc(cls.period) : "-"}</div>
+            <div class="meta">Due ${formatDate(t.dueDate)}</div>
+            <label class="todo-line"><input type="checkbox" data-toggle-task="${esc(t.id)}" ${t.completed ? "checked" : ""}/> Complete</label>
+          </div>
+        `;
+      }
+
+      els.activeTodoList.innerHTML = active.length ? active.map(item).join("") : '<div class="empty">No active tasks. Nice work!</div>';
+      els.completedTodoList.innerHTML = completed.length ? completed.map(item).join("") : '<div class="empty">No completed tasks yet.</div>';
+    }
+
+    function renderAll() {
+      renderClasses();
+      renderTaskManagerList();
+      renderCalendar();
+      renderTodo();
+      save();
+    }
+
+    function resetTaskForm() {
+      els.taskTitle.value = "";
+      els.taskType.value = "assignment";
+      els.taskDueDate.value = "";
+      els.taskLink.value = "";
+      renderClassDropdown();
+    }
+
+    function openModal() {
+      resetTaskForm();
+      els.taskModal.classList.add("open");
+      els.taskModal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeModal() {
+      els.taskModal.classList.remove("open");
+      els.taskModal.setAttribute("aria-hidden", "true");
+    }
+
+    document.addEventListener("click", (e) => {
+      const toggleId = e.target.getAttribute("data-toggle-task");
+      if (toggleId) {
+        const task = state.tasks.find(t => t.id === toggleId);
+        if (task) {
+          task.completed = e.target.checked;
+          renderAll();
+        }
+      }
+
+      const delClassId = e.target.getAttribute("data-delete-class");
+      if (delClassId) {
+        state.classes = state.classes.filter(c => c.id !== delClassId);
+        state.tasks = state.tasks.filter(t => t.classId !== delClassId);
+        renderAll();
+      }
+
+      if (e.target === els.taskModal) closeModal();
+    });
+
+    els.tabs.forEach(btn => {
+      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+    });
+
+    els.addClassBtn.addEventListener("click", () => {
+      const name = els.className.value.trim();
+      const period = els.classPeriod.value.trim();
+      const color = els.classColor.value;
+      if (!name || !period) {
+        alert("Please enter class name and period number.");
+        return;
+      }
+      const periodNum = Number(period);
+      if (!Number.isInteger(periodNum) || periodNum < 1) {
+        alert("Period must be a positive whole number.");
+        return;
+      }
+      state.classes.push({ id: uid("class"), name, period: periodNum, color });
+      els.className.value = "";
+      els.classPeriod.value = "";
+      renderAll();
+    });
+
+    els.openTaskModalBtn.addEventListener("click", openModal);
+    els.closeTaskModalBtn.addEventListener("click", closeModal);
+
+    els.addTaskBtn.addEventListener("click", () => {
+      const title = els.taskTitle.value.trim();
+      const type = els.taskType.value;
+      const classId = els.taskClass.value;
+      const dueDate = els.taskDueDate.value;
+      const link = els.taskLink.value.trim();
+
+      if (!title || !type || !classId || !dueDate) {
+        alert("Please fill in title, type, class, and due date.");
+        return;
+      }
+      if (link) {
+        try {
+          const url = new URL(link);
+          if (!/^https?:$/.test(url.protocol)) throw new Error();
+        } catch {
+          alert("Please enter a valid http(s) URL.");
+          return;
+        }
+      }
+
+      state.tasks.push({
+        id: uid("task"),
+        title,
+        type: type === "test" ? "test" : "assignment",
+        classId,
+        dueDate,
+        link,
+        completed: false
+      });
+
+      closeModal();
+      renderAll();
+    });
+
+    els.prevMonthBtn.addEventListener("click", () => {
+      state.viewDate = new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() - 1, 1);
+      renderCalendar();
+    });
+    els.nextMonthBtn.addEventListener("click", () => {
+      state.viewDate = new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() + 1, 1);
+      renderCalendar();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && els.taskModal.classList.contains("open")) closeModal();
+    });
+
+    load();
+    renderAll();
+  </script>
+</body>
+</html>
