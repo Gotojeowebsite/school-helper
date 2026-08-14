@@ -1,681 +1,465 @@
 /**
- * AcademiaPro — Complete Academic Organizer Application with Cloud Sync
- * Single bundle containing data store, calculations engine, Firebase Auth & Cloud Firestore sync,
- * and view controllers. 100% functional both offline and cloud-connected.
+ * AcademiaPro — Sophisticated Academic Organizer & Workspace
+ * Unbreakable Client-Side Local Storage Architecture with Instant Persistence,
+ * Clean Zero-State for New Users, Full Offline Capability & Google Sites Embed Compatibility.
  */
 
 (function() {
   'use strict';
 
-  const ACCOUNTS_REGISTRY_KEY = 'academia_pro_accounts_v1';
-  const ACTIVE_ACCOUNT_KEY = 'academia_pro_active_account_v1';
+  // Primary Storage Keys
+  const PRIMARY_STORAGE_KEY = 'academia_pro_data_v2';
+  const BACKUP_STORAGE_KEY = 'academia_pro_backup_v2';
   const FIREBASE_CONFIG_KEY = 'academia_firebase_config_v1';
-
-  // --- LOCAL ACCOUNT MANAGER ---
-  class LocalAccountManager {
-    constructor() {
-      this.accounts = this.loadAccounts();
-      this.activeAccountId = this.loadActiveAccountId();
-    }
-
-    loadAccounts() {
-      try {
-        const raw = localStorage.getItem(ACCOUNTS_REGISTRY_KEY);
-        return raw ? JSON.parse(raw) : [];
-      } catch (e) {
-        return [];
-      }
-    }
-
-    saveAccounts() {
-      localStorage.setItem(ACCOUNTS_REGISTRY_KEY, JSON.stringify(this.accounts));
-    }
-
-    loadActiveAccountId() {
-      return localStorage.getItem(ACTIVE_ACCOUNT_KEY) || null;
-    }
-
-    saveActiveAccountId(id) {
-      this.activeAccountId = id;
-      if (id) {
-        localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
-      } else {
-        localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
-      }
-    }
-
-    getStorageKeyForAccount(accountId) {
-      return `academia_pro_data_${accountId}`;
-    }
-
-    getActiveAccount() {
-      if (!this.activeAccountId) return null;
-      return this.accounts.find(a => a.id === this.activeAccountId) || null;
-    }
-
-    getActiveStorageKey() {
-      if (!this.activeAccountId) return null;
-      return this.getStorageKeyForAccount(this.activeAccountId);
-    }
-
-    isLoggedIn() {
-      return !!this.activeAccountId && !!this.getActiveAccount();
-    }
-
-    createAccount(name, schoolName, avatarColor) {
-      const id = 'acct-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-      const initials = name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-      const account = {
-        id,
-        name: name.trim(),
-        schoolName: schoolName.trim() || '',
-        initials,
-        avatarColor: avatarColor || this._pickAvatarColor(),
-        createdAt: new Date().toISOString()
-      };
-      this.accounts.push(account);
-      this.saveAccounts();
-      this.saveActiveAccountId(id);
-      return account;
-    }
-
-    switchAccount(accountId) {
-      const account = this.accounts.find(a => a.id === accountId);
-      if (account) {
-        this.saveActiveAccountId(accountId);
-        return account;
-      }
-      return null;
-    }
-
-    updateAccount(accountId, updates) {
-      const idx = this.accounts.findIndex(a => a.id === accountId);
-      if (idx !== -1) {
-        if (updates.name) {
-          this.accounts[idx].name = updates.name;
-          this.accounts[idx].initials = updates.name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-        }
-        if (updates.schoolName !== undefined) this.accounts[idx].schoolName = updates.schoolName;
-        if (updates.avatarColor) this.accounts[idx].avatarColor = updates.avatarColor;
-        this.saveAccounts();
-        return this.accounts[idx];
-      }
-      return null;
-    }
-
-    deleteAccount(accountId) {
-      this.accounts = this.accounts.filter(a => a.id !== accountId);
-      this.saveAccounts();
-      // Remove that account's data
-      try {
-        localStorage.removeItem(this.getStorageKeyForAccount(accountId));
-      } catch (e) { /* ignore */ }
-      // If deleting the active account, clear it
-      if (this.activeAccountId === accountId) {
-        this.saveActiveAccountId(null);
-      }
-    }
-
-    logout() {
-      this.saveActiveAccountId(null);
-    }
-
-    _pickAvatarColor() {
-      const colors = [
-        'linear-gradient(135deg, #f59e0b, #ec4899)',
-        'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-        'linear-gradient(135deg, #10b981, #06b6d4)',
-        'linear-gradient(135deg, #ef4444, #f97316)',
-        'linear-gradient(135deg, #6366f1, #ec4899)',
-        'linear-gradient(135deg, #14b8a6, #3b82f6)',
-        'linear-gradient(135deg, #8b5cf6, #f43f5e)',
-        'linear-gradient(135deg, #f97316, #eab308)'
-      ];
-      return colors[Math.floor(Math.random() * colors.length)];
-    }
-
-    // Migrate legacy data: if there's data under the old key and no accounts exist
-    migrateLegacyData(newAccountId) {
-      const legacyKey = 'academia_pro_data_v1';
-      try {
-        const legacyData = localStorage.getItem(legacyKey);
-        if (legacyData) {
-          localStorage.setItem(this.getStorageKeyForAccount(newAccountId), legacyData);
-          localStorage.removeItem(legacyKey);
-          return true;
-        }
-      } catch (e) { /* ignore */ }
-      return false;
-    }
-  }
-
-  const accountManager = new LocalAccountManager();
 
   // Available Subject Color Palettes
   const SUBJECT_COLORS = [
+    '#4f46e5', // Indigo
     '#3b82f6', // Blue
+    '#0ea5e9', // Cyan
     '#10b981', // Emerald
-    '#8b5cf6', // Purple
-    '#f59e0b', // Amber
-    '#ef4444', // Red
-    '#06b6d4', // Cyan
-    '#ec4899', // Pink
     '#14b8a6', // Teal
+    '#8b5cf6', // Purple
+    '#ec4899', // Pink
+    '#f59e0b', // Amber
     '#f97316', // Orange
-    '#6366f1', // Indigo
+    '#ef4444', // Rose/Red
   ];
 
-  // Helper: Generate Relative Date ISO String
+  const AVATAR_PALETTES = [
+    'linear-gradient(135deg, #4f46e5, #3b82f6)',
+    'linear-gradient(135deg, #10b981, #06b6d4)',
+    'linear-gradient(135deg, #8b5cf6, #ec4899)',
+    'linear-gradient(135deg, #f59e0b, #ef4444)',
+    'linear-gradient(135deg, #0ea5e9, #6366f1)',
+    'linear-gradient(135deg, #14b8a6, #3b82f6)',
+    'linear-gradient(135deg, #f97316, #eab308)',
+    'linear-gradient(135deg, #ec4899, #8b5cf6)'
+  ];
+
+  // --- SAFE RESILIENT STORAGE ENGINE ---
+  const StorageSafe = {
+    _memory: {},
+    getItem(key) {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const item = localStorage.getItem(key);
+          if (item !== null) return item;
+        }
+      } catch (e) {
+        console.warn('Storage read warning:', e);
+      }
+      return this._memory[key] || null;
+    },
+    setItem(key, value) {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(key, value);
+        }
+      } catch (e) {
+        console.warn('Storage write warning:', e);
+      }
+      this._memory[key] = value;
+    },
+    removeItem(key) {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(key);
+        }
+      } catch (e) {}
+      delete this._memory[key];
+    }
+  };
+
+  // Helper: Relative ISO date generator
   function getRelativeDate(daysOffset, timeString = '23:59') {
     const date = new Date();
     date.setDate(date.getDate() + daysOffset);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    
     if (!timeString) return `${year}-${month}-${day}`;
     return `${year}-${month}-${day}T${timeString}:00`;
   }
 
-  // Default Initial Seed Data
-  const DEFAULT_DATA = {
-    settings: {
-      activeSemesterId: 'sem-fall-2026',
-      theme: 'light',
-      scheduleMode: 'standard',
-      currentCycleDay: 'A',
-      studentName: 'Alex Morgan',
-      schoolName: 'Westwood Academy',
-      notificationsEnabled: false,
-    },
-    semesters: [
-      {
-        id: 'sem-fall-2026',
-        name: 'Fall 2026',
-        startDate: '2026-08-20',
-        endDate: '2026-12-18',
-        isActive: true,
-      },
-      {
-        id: 'sem-spring-2027',
-        name: 'Spring 2027',
-        startDate: '2027-01-10',
-        endDate: '2027-05-28',
-        isActive: false,
-      }
-    ],
-    classes: [
-      {
-        id: 'cls-calc',
-        semesterId: 'sem-fall-2026',
-        name: 'AP Calculus BC',
-        code: 'MATH 302',
-        teacher: 'Dr. Aris Thorne',
-        teacherEmail: 'a.thorne@westwood.edu',
-        room: 'Science Bldg 304',
-        color: '#3b82f6',
-        credits: 4,
-        gradeCategories: [
-          { id: 'gc-calc-hw', name: 'Homework & Problem Sets', weight: 20 },
-          { id: 'gc-calc-quiz', name: 'Quizzes', weight: 25 },
-          { id: 'gc-calc-exam', name: 'Unit Exams', weight: 35 },
-          { id: 'gc-calc-final', name: 'Final Exam', weight: 20 }
-        ],
-        notes: 'Office hours: Tuesdays & Thursdays 3:30 - 4:30 PM in Room 304.'
-      },
-      {
-        id: 'cls-bio',
-        semesterId: 'sem-fall-2026',
-        name: 'Advanced AP Biology',
-        code: 'BIO 201',
-        teacher: 'Prof. Elena Vance',
-        teacherEmail: 'e.vance@westwood.edu',
-        room: 'Bio Lab 2',
-        color: '#10b981',
-        credits: 4,
-        gradeCategories: [
-          { id: 'gc-bio-lab', name: 'Lab Reports', weight: 30 },
-          { id: 'gc-bio-hw', name: 'Homework & Reading', weight: 15 },
-          { id: 'gc-bio-tests', name: 'Exams & Practicals', weight: 40 },
-          { id: 'gc-bio-part', name: 'Seminar Participation', weight: 15 }
-        ],
-        notes: 'Lab safety goggles required at all lab sessions.'
-      },
-      {
-        id: 'cls-lit',
-        semesterId: 'sem-fall-2026',
-        name: 'World Literature & Rhetoric',
-        code: 'ENG 115',
-        teacher: 'Ms. Clara Higgins',
-        teacherEmail: 'c.higgins@westwood.edu',
-        room: 'Humanities Hall 112',
-        color: '#8b5cf6',
-        credits: 3,
-        gradeCategories: [
-          { id: 'gc-lit-essays', name: 'Essays & Papers', weight: 45 },
-          { id: 'gc-lit-read', name: 'Reading Journals', weight: 25 },
-          { id: 'gc-lit-pres', name: 'Presentations & Seminars', weight: 30 }
-        ],
-        notes: 'Formatting style must strictly follow MLA 9th Edition.'
-      },
-      {
-        id: 'cls-cs',
-        semesterId: 'sem-fall-2026',
-        name: 'Intro to Computer Science',
-        code: 'CS 210',
-        teacher: 'Mr. David Zhang',
-        teacherEmail: 'd.zhang@westwood.edu',
-        room: 'Turing Computer Lab A',
-        color: '#f59e0b',
-        credits: 3,
-        gradeCategories: [
-          { id: 'gc-cs-proj', name: 'Programming Projects', weight: 50 },
-          { id: 'gc-cs-labs', name: 'Weekly Lab Exercises', weight: 20 },
-          { id: 'gc-cs-exam', name: 'Midterm & Final Exams', weight: 30 }
-        ],
-        notes: 'Submit GitHub repository links via the class portal.'
-      }
-    ],
-    schedule: [
-      { id: 'sch-1', classId: 'cls-calc', dayOfWeek: 1, startTime: '09:00', endTime: '10:15', room: '304', scheduleType: 'all' },
-      { id: 'sch-2', classId: 'cls-calc', dayOfWeek: 3, startTime: '09:00', endTime: '10:15', room: '304', scheduleType: 'all' },
-      { id: 'sch-3', classId: 'cls-calc', dayOfWeek: 5, startTime: '09:00', endTime: '10:15', room: '304', scheduleType: 'all' },
+  // Initial Empty Dataset for New Users (Starts from ZERO)
+  function getEmptyInitialData(studentName = 'Student', schoolName = '') {
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+    const termName = currentMonth >= 7 && currentMonth <= 11 ? `Fall ${currentYear}` : `Spring ${currentYear}`;
 
-      { id: 'sch-4', classId: 'cls-bio', dayOfWeek: 2, startTime: '09:30', endTime: '11:00', room: 'Bio Lab 2', scheduleType: 'all' },
-      { id: 'sch-5', classId: 'cls-bio', dayOfWeek: 4, startTime: '09:30', endTime: '11:00', room: 'Bio Lab 2', scheduleType: 'all' },
-      { id: 'sch-6', classId: 'cls-bio', dayOfWeek: 5, startTime: '13:00', endTime: '15:00', room: 'Bio Lab 2', scheduleType: 'all' },
-
-      { id: 'sch-7', classId: 'cls-lit', dayOfWeek: 1, startTime: '10:45', endTime: '12:15', room: '112', scheduleType: 'all' },
-      { id: 'sch-8', classId: 'cls-lit', dayOfWeek: 3, startTime: '10:45', endTime: '12:15', room: '112', scheduleType: 'all' },
-
-      { id: 'sch-9', classId: 'cls-cs', dayOfWeek: 2, startTime: '13:00', endTime: '14:30', room: 'Turing Lab A', scheduleType: 'all' },
-      { id: 'sch-10', classId: 'cls-cs', dayOfWeek: 4, startTime: '13:00', endTime: '14:30', room: 'Turing Lab A', scheduleType: 'all' }
-    ],
-    assignments: [
-      {
-        id: 'asg-1',
-        semesterId: 'sem-fall-2026',
-        classId: 'cls-calc',
-        title: 'Taylor Series & Power Series Convergence Problem Set',
-        description: 'Complete problem set questions #1-28 from Chapter 9.4. Show all working steps including ratio test and interval checks.',
-        type: 'homework',
-        dueDate: getRelativeDate(1, '23:59'),
-        priority: 'high',
-        status: 'in-progress',
-        completionPercentage: 60,
-        gradeCategoryId: 'gc-calc-hw',
-        scoreEarned: null,
-        maxScore: 100,
-        subtasks: [
-          { id: 'st-1', title: 'Problems 1-10: Ratio Test calculations', isCompleted: true },
-          { id: 'st-2', title: 'Problems 11-20: Radius of Convergence', isCompleted: true },
-          { id: 'st-3', title: 'Problems 21-28: Endpoint analysis', isCompleted: false },
-          { id: 'st-4', title: 'Scan and review final steps', isCompleted: false }
-        ],
-        notes: 'Check online odd-number answers in textbook appendix.'
+    return {
+      settings: {
+        activeSemesterId: 'sem-current',
+        theme: 'light',
+        scheduleMode: 'standard',
+        currentCycleDay: 'A',
+        studentName: studentName || 'Student',
+        schoolName: schoolName || '',
+        avatarColor: AVATAR_PALETTES[0],
+        notificationsEnabled: false,
+        isProfileConfigured: false,
       },
-      {
-        id: 'asg-2',
-        semesterId: 'sem-fall-2026',
-        classId: 'cls-bio',
-        title: 'Cellular Respiration Formal Lab Report',
-        description: 'Write up a 4-page formal lab report investigating yeast fermentation rates at varying temperatures.',
-        type: 'lab',
-        dueDate: getRelativeDate(3, '17:00'),
-        priority: 'high',
-        status: 'not-started',
-        completionPercentage: 15,
-        gradeCategoryId: 'gc-bio-lab',
-        scoreEarned: null,
-        maxScore: 100,
-        subtasks: [
-          { id: 'st-5', title: 'Plot rate curve graphs in Excel', isCompleted: true },
-          { id: 'st-6', title: 'Draft methodology and hypothesis', isCompleted: false },
-          { id: 'st-7', title: 'Write discussion and error analysis', isCompleted: false },
-          { id: 'st-8', title: 'Format citations in APA 7th', isCompleted: false }
-        ],
-        notes: 'Include raw data tables in Appendix B.'
-      },
-      {
-        id: 'asg-3',
-        semesterId: 'sem-fall-2026',
-        classId: 'cls-lit',
-        title: 'Comparative Analysis Essay: Hamlet vs. Rosencrantz & Guildenstern',
-        description: '1,500-word analytical paper comparing dramatic irony and existential dread in Stoppard vs Shakespeare.',
-        type: 'essay',
-        dueDate: getRelativeDate(5, '23:59'),
-        priority: 'medium',
-        status: 'not-started',
-        completionPercentage: 0,
-        gradeCategoryId: 'gc-lit-essays',
-        scoreEarned: null,
-        maxScore: 100,
-        subtasks: [
-          { id: 'st-9', title: 'Select 6 key textual excerpts', isCompleted: false },
-          { id: 'st-10', title: 'Create thesis statement and outline', isCompleted: false },
-          { id: 'st-11', title: 'Draft rough draft', isCompleted: false },
-          { id: 'st-12', title: 'Peer review and final proofreading', isCompleted: false }
-        ],
-        notes: 'Minimum 4 scholarly secondary sources required.'
-      },
-      {
-        id: 'asg-4',
-        semesterId: 'sem-fall-2026',
-        classId: 'cls-cs',
-        title: 'Project 2: Self-Balancing AVL Tree Implementation',
-        description: 'Implement a generic AVL Binary Search Tree in Java/C++ with rebalancing rotations and benchmark test suites.',
-        type: 'project',
-        dueDate: getRelativeDate(7, '23:59'),
-        priority: 'high',
-        status: 'in-progress',
-        completionPercentage: 40,
-        gradeCategoryId: 'gc-cs-proj',
-        scoreEarned: null,
-        maxScore: 100,
-        subtasks: [
-          { id: 'st-13', title: 'BST Node insertion & deletion', isCompleted: true },
-          { id: 'st-14', title: 'Implement Left and Right Rotations', isCompleted: true },
-          { id: 'st-15', title: 'Double Rotation (LR & RL) logic', isCompleted: false },
-          { id: 'st-16', title: 'Run automated JUnit unit tests', isCompleted: false }
-        ],
-        notes: 'Pass all test cases in GitHub autograder.'
-      },
-      {
-        id: 'asg-5',
-        semesterId: 'sem-fall-2026',
-        classId: 'cls-calc',
-        title: 'Derivatives & Integration Techniques Review',
-        description: 'Pre-exam warmup drill covering u-substitution and integration by parts.',
-        type: 'homework',
-        dueDate: getRelativeDate(-2, '23:59'),
-        priority: 'low',
-        status: 'completed',
-        completionPercentage: 100,
-        gradeCategoryId: 'gc-calc-hw',
-        scoreEarned: 96,
-        maxScore: 100,
-        subtasks: [
-          { id: 'st-17', title: 'Review Chapter 5 formulas', isCompleted: true },
-          { id: 'st-18', title: 'Complete practice quiz', isCompleted: true }
-        ],
-        notes: 'Scored 96/100.'
-      }
-    ],
-    exams: [
-      {
-        id: 'ex-1',
-        semesterId: 'sem-fall-2026',
-        classId: 'cls-calc',
-        title: 'Calculus BC Midterm Examination',
-        date: getRelativeDate(4, '').split('T')[0],
-        startTime: '09:00',
-        duration: 90,
-        room: 'Science Hall 304',
-        seatNumber: 'Seat 14',
-        description: 'Covers Units 1-6: Limits, Derivatives, Integrals, and Series Tests. Scientific calculator allowed.',
-        gradeCategoryId: 'gc-calc-exam',
-        scoreEarned: null,
-        maxScore: 100,
-        status: 'upcoming',
-        topics: ['Limits and Continuity', 'Implicit Differentiation', 'Integration by Parts', 'Geometric Series', 'Ratio Test']
-      },
-      {
-        id: 'ex-2',
-        semesterId: 'sem-fall-2026',
-        classId: 'cls-bio',
-        title: 'Unit 3 Cellular Energetics & Genetics Exam',
-        date: getRelativeDate(9, '').split('T')[0],
-        startTime: '09:30',
-        duration: 75,
-        room: 'Bio Lecture Hall B',
-        seatNumber: 'Seat 42',
-        description: '50 Multiple Choice questions + 2 Free Response Questions on Photosynthesis, Respiration, and Genetics.',
-        gradeCategoryId: 'gc-bio-tests',
-        scoreEarned: null,
-        maxScore: 100,
-        status: 'upcoming',
-        topics: ['Krebs Cycle', 'Electron Transport Chain', 'Light Reactions', 'Punnett Squares']
-      },
-      {
-        id: 'ex-3',
-        semesterId: 'sem-fall-2026',
-        classId: 'cls-cs',
-        title: 'CS 210 Midterm: Linear Data Structures',
-        date: getRelativeDate(-10, '').split('T')[0],
-        startTime: '13:00',
-        duration: 80,
-        room: 'Turing Lab A',
-        seatNumber: 'Station 8',
-        description: 'Covers Linked Lists, Stacks, Queues, and Big-O Complexity.',
-        gradeCategoryId: 'gc-cs-exam',
-        scoreEarned: 94,
-        maxScore: 100,
-        status: 'completed',
-        topics: ['Big-O Analysis', 'Doubly Linked Lists', 'Circular Queues']
-      }
-    ]
-  };
-
-  // --- FIREBASE CLOUD SYNC MANAGER ---
-  class FirebaseSyncManager {
-    constructor() {
-      this.isConfigured = false;
-      this.currentUser = null;
-      this.db = null;
-      this.auth = null;
-      this.syncDebounceTimer = null;
-      this.statusListeners = new Set();
-      this.init();
-    }
-
-    init() {
-      if (typeof window === 'undefined' || typeof window.firebase === 'undefined') {
-        console.info('Firebase SDK not loaded. Running in local storage mode.');
-        return;
-      }
-
-      const savedConfig = this.getSavedConfig();
-      if (!savedConfig || !savedConfig.apiKey) {
-        console.info('No custom Firebase configuration provided. Running in local offline mode.');
-        return;
-      }
-
-      try {
-        if (!window.firebase.apps || !window.firebase.apps.length) {
-          window.firebase.initializeApp(savedConfig);
+      semesters: [
+        {
+          id: 'sem-current',
+          name: termName,
+          startDate: `${currentYear}-01-01`,
+          endDate: `${currentYear}-12-31`,
+          isActive: true,
         }
-        this.auth = window.firebase.auth();
-        this.db = window.firebase.firestore();
-        this.isConfigured = true;
-
-        this.auth.onAuthStateChanged(user => {
-          this.currentUser = user;
-          this.notifyStatusChange();
-          if (user) {
-            this.fetchFromCloudAndMerge();
-            this.listenToCloudChanges();
-          }
-        });
-      } catch (err) {
-        console.error('Firebase initialization error:', err);
-      }
-    }
-
-    getSavedConfig() {
-      try {
-        const raw = localStorage.getItem(FIREBASE_CONFIG_KEY);
-        return raw ? JSON.parse(raw) : null;
-      } catch (e) {
-        return null;
-      }
-    }
-
-    saveConfig(config) {
-      try {
-        localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(config));
-        this.init();
-        return true;
-      } catch (e) {
-        return false;
-      }
-    }
-
-    onStatusChange(fn) {
-      this.statusListeners.add(fn);
-      fn(this.getStatus());
-      return () => this.statusListeners.delete(fn);
-    }
-
-    notifyStatusChange() {
-      const status = this.getStatus();
-      this.statusListeners.forEach(fn => fn(status));
-    }
-
-    getStatus() {
-      return {
-        isConfigured: this.isConfigured,
-        isAuthenticated: !!this.currentUser,
-        user: this.currentUser ? {
-          email: this.currentUser.email,
-          uid: this.currentUser.uid,
-          displayName: this.currentUser.displayName
-        } : null
-      };
-    }
-
-    async signUp(email, password, displayName) {
-      if (!this.auth) throw new Error('Please configure Firebase in Settings first.');
-      const cred = await this.auth.createUserWithEmailAndPassword(email, password);
-      if (displayName && cred.user) {
-        await cred.user.updateProfile({ displayName });
-      }
-      return cred.user;
-    }
-
-    async signIn(email, password) {
-      if (!this.auth) throw new Error('Please configure Firebase in Settings first.');
-      const cred = await this.auth.signInWithEmailAndPassword(email, password);
-      return cred.user;
-    }
-
-    async signOut() {
-      if (this.auth) {
-        await this.auth.signOut();
-      }
-    }
-
-    // Debounced Cloud Sync from local store to Firestore
-    syncToCloud(data) {
-      if (!this.db || !this.currentUser) return;
-      
-      clearTimeout(this.syncDebounceTimer);
-      this.syncDebounceTimer = setTimeout(async () => {
-        try {
-          updateCloudStatusDot('syncing');
-          await this.db.collection('users').doc(this.currentUser.uid).set({
-            planner: data,
-            lastSyncedAt: new Date().toISOString()
-          }, { merge: true });
-          updateCloudStatusDot('synced');
-        } catch (e) {
-          console.error('Cloud sync error:', e);
-          updateCloudStatusDot('offline');
-        }
-      }, 800);
-    }
-
-    async fetchFromCloudAndMerge() {
-      if (!this.db || !this.currentUser) return;
-      try {
-        updateCloudStatusDot('syncing');
-        const doc = await this.db.collection('users').doc(this.currentUser.uid).get();
-        if (doc.exists && doc.data() && doc.data().planner) {
-          const cloudData = doc.data().planner;
-          store.data = store.validateAndMigrate(cloudData);
-          store.saveToStorage(store.data);
-          store.notify('cloud_synced');
-          showToast('☁️ Cloud data synced!', 'success');
-        } else {
-          // Upload initial local data to newly created cloud account
-          this.syncToCloud(store.getState());
-        }
-        updateCloudStatusDot('synced');
-      } catch (e) {
-        console.error('Fetch cloud data error:', e);
-        updateCloudStatusDot('offline');
-      }
-    }
-
-    listenToCloudChanges() {
-      if (!this.db || !this.currentUser) return;
-      this.db.collection('users').doc(this.currentUser.uid).onSnapshot(doc => {
-        if (doc.exists && doc.data() && doc.data().planner) {
-          const incoming = doc.data().planner;
-          // Only update if different
-          const currentStr = JSON.stringify(store.data);
-          const incomingStr = JSON.stringify(incoming);
-          if (currentStr !== incomingStr) {
-            store.data = store.validateAndMigrate(incoming);
-            store.saveToStorage(store.data);
-            store.notify('cloud_realtime_update');
-          }
-        }
-      });
-    }
+      ],
+      classes: [],       // COMPLETELY EMPTY FOR NEW USERS
+      schedule: [],      // COMPLETELY EMPTY FOR NEW USERS
+      assignments: [],   // COMPLETELY EMPTY FOR NEW USERS
+      exams: []          // COMPLETELY EMPTY FOR NEW USERS
+    };
   }
 
-  const cloud = new FirebaseSyncManager();
+  // Optional Sample Dataset for Testing / Demo (Only loaded when explicitly requested)
+  function getSampleDemoData(studentName = 'Alex Morgan', schoolName = 'Westwood Academy') {
+    return {
+      settings: {
+        activeSemesterId: 'sem-demo',
+        theme: 'light',
+        scheduleMode: 'standard',
+        currentCycleDay: 'A',
+        studentName: studentName,
+        schoolName: schoolName,
+        avatarColor: AVATAR_PALETTES[0],
+        notificationsEnabled: false,
+        isProfileConfigured: true,
+      },
+      semesters: [
+        {
+          id: 'sem-demo',
+          name: 'Fall Term',
+          startDate: getRelativeDate(-30, '').split('T')[0],
+          endDate: getRelativeDate(90, '').split('T')[0],
+          isActive: true,
+        }
+      ],
+      classes: [
+        {
+          id: 'cls-calc',
+          semesterId: 'sem-demo',
+          name: 'AP Calculus BC',
+          code: 'MATH 302',
+          teacher: 'Dr. Thorne',
+          teacherEmail: 'thorne@school.edu',
+          room: 'Hall 304',
+          color: '#4f46e5',
+          credits: 4,
+          gradeCategories: [
+            { id: 'gc-calc-hw', name: 'Homework', weight: 25 },
+            { id: 'gc-calc-quiz', name: 'Quizzes', weight: 25 },
+            { id: 'gc-calc-exam', name: 'Unit Exams', weight: 30 },
+            { id: 'gc-calc-final', name: 'Final Exam', weight: 20 }
+          ],
+          notes: 'Office hours Tuesdays 3:30 PM'
+        },
+        {
+          id: 'cls-bio',
+          semesterId: 'sem-demo',
+          name: 'Advanced Biology',
+          code: 'BIO 201',
+          teacher: 'Prof. Vance',
+          teacherEmail: 'vance@school.edu',
+          room: 'Bio Lab 2',
+          color: '#10b981',
+          credits: 4,
+          gradeCategories: [
+            { id: 'gc-bio-lab', name: 'Lab Reports', weight: 35 },
+            { id: 'gc-bio-hw', name: 'Problem Sets', weight: 20 },
+            { id: 'gc-bio-tests', name: 'Exams', weight: 45 }
+          ],
+          notes: 'Lab safety goggles required'
+        },
+        {
+          id: 'cls-lit',
+          semesterId: 'sem-demo',
+          name: 'World Literature',
+          code: 'ENG 115',
+          teacher: 'Ms. Higgins',
+          teacherEmail: 'higgins@school.edu',
+          room: 'Humanities 112',
+          color: '#8b5cf6',
+          credits: 3,
+          gradeCategories: [
+            { id: 'gc-lit-essays', name: 'Essays', weight: 50 },
+            { id: 'gc-lit-read', name: 'Reading Journals', weight: 25 },
+            { id: 'gc-lit-pres', name: 'Seminars', weight: 25 }
+          ],
+          notes: 'MLA 9th Edition format'
+        },
+        {
+          id: 'cls-cs',
+          semesterId: 'sem-demo',
+          name: 'Computer Science',
+          code: 'CS 210',
+          teacher: 'Mr. Zhang',
+          teacherEmail: 'zhang@school.edu',
+          room: 'Turing Lab A',
+          color: '#0ea5e9',
+          credits: 3,
+          gradeCategories: [
+            { id: 'gc-cs-proj', name: 'Projects', weight: 50 },
+            { id: 'gc-cs-labs', name: 'Weekly Labs', weight: 25 },
+            { id: 'gc-cs-exam', name: 'Exams', weight: 25 }
+          ],
+          notes: 'GitHub autograder'
+        }
+      ],
+      schedule: [
+        { id: 'sch-1', classId: 'cls-calc', dayOfWeek: 1, startTime: '09:00', endTime: '10:15', room: '304', scheduleType: 'all' },
+        { id: 'sch-2', classId: 'cls-calc', dayOfWeek: 3, startTime: '09:00', endTime: '10:15', room: '304', scheduleType: 'all' },
+        { id: 'sch-3', classId: 'cls-calc', dayOfWeek: 5, startTime: '09:00', endTime: '10:15', room: '304', scheduleType: 'all' },
+        { id: 'sch-4', classId: 'cls-bio', dayOfWeek: 2, startTime: '09:30', endTime: '11:00', room: 'Lab 2', scheduleType: 'all' },
+        { id: 'sch-5', classId: 'cls-bio', dayOfWeek: 4, startTime: '09:30', endTime: '11:00', room: 'Lab 2', scheduleType: 'all' },
+        { id: 'sch-6', classId: 'cls-lit', dayOfWeek: 1, startTime: '10:45', endTime: '12:00', room: '112', scheduleType: 'all' },
+        { id: 'sch-7', classId: 'cls-lit', dayOfWeek: 3, startTime: '10:45', endTime: '12:00', room: '112', scheduleType: 'all' },
+        { id: 'sch-8', classId: 'cls-cs', dayOfWeek: 2, startTime: '13:00', endTime: '14:30', room: 'Lab A', scheduleType: 'all' },
+        { id: 'sch-9', classId: 'cls-cs', dayOfWeek: 4, startTime: '13:00', endTime: '14:30', room: 'Lab A', scheduleType: 'all' }
+      ],
+      assignments: [
+        {
+          id: 'asg-1',
+          semesterId: 'sem-demo',
+          classId: 'cls-calc',
+          title: 'Taylor Series Convergence Problem Set',
+          description: 'Questions #1-20 from Chapter 9. Ratio tests and radius of convergence.',
+          type: 'homework',
+          dueDate: getRelativeDate(1, '23:59'),
+          priority: 'high',
+          status: 'in-progress',
+          completionPercentage: 50,
+          gradeCategoryId: 'gc-calc-hw',
+          scoreEarned: null,
+          maxScore: 100,
+          subtasks: [
+            { id: 'st-1', title: 'Problems 1-10: Ratio Test', isCompleted: true },
+            { id: 'st-2', title: 'Problems 11-20: Radius calculations', isCompleted: false }
+          ],
+          notes: ''
+        },
+        {
+          id: 'asg-2',
+          semesterId: 'sem-demo',
+          classId: 'cls-bio',
+          title: 'Cellular Respiration Formal Lab Report',
+          description: '4-page lab writeup on fermentation rates with graph plots.',
+          type: 'lab',
+          dueDate: getRelativeDate(3, '17:00'),
+          priority: 'high',
+          status: 'not-started',
+          completionPercentage: 0,
+          gradeCategoryId: 'gc-bio-lab',
+          scoreEarned: null,
+          maxScore: 100,
+          subtasks: [
+            { id: 'st-3', title: 'Plot data curves', isCompleted: false },
+            { id: 'st-4', title: 'Draft discussion & conclusions', isCompleted: false }
+          ],
+          notes: ''
+        },
+        {
+          id: 'asg-3',
+          semesterId: 'sem-demo',
+          classId: 'cls-lit',
+          title: 'Comparative Analysis Essay: Hamlet',
+          description: '1,500-word analytical paper comparing dramatic irony and existential themes.',
+          type: 'essay',
+          dueDate: getRelativeDate(5, '23:59'),
+          priority: 'medium',
+          status: 'not-started',
+          completionPercentage: 0,
+          gradeCategoryId: 'gc-lit-essays',
+          scoreEarned: null,
+          maxScore: 100,
+          subtasks: [],
+          notes: ''
+        },
+        {
+          id: 'asg-4',
+          semesterId: 'sem-demo',
+          classId: 'cls-cs',
+          title: 'Project 2: Self-Balancing AVL Tree',
+          description: 'Implement generic AVL Binary Search Tree with rebalancing rotations.',
+          type: 'project',
+          dueDate: getRelativeDate(7, '23:59'),
+          priority: 'high',
+          status: 'in-progress',
+          completionPercentage: 60,
+          gradeCategoryId: 'gc-cs-proj',
+          scoreEarned: null,
+          maxScore: 100,
+          subtasks: [],
+          notes: ''
+        },
+        {
+          id: 'asg-5',
+          semesterId: 'sem-demo',
+          classId: 'cls-calc',
+          title: 'Derivatives & Integration Review Drill',
+          description: 'Warmup problem sheet.',
+          type: 'homework',
+          dueDate: getRelativeDate(-2, '23:59'),
+          priority: 'low',
+          status: 'completed',
+          completionPercentage: 100,
+          gradeCategoryId: 'gc-calc-hw',
+          scoreEarned: 96,
+          maxScore: 100,
+          subtasks: [],
+          notes: 'Scored 96/100'
+        }
+      ],
+      exams: [
+        {
+          id: 'ex-1',
+          semesterId: 'sem-demo',
+          classId: 'cls-calc',
+          title: 'Calculus BC Midterm Examination',
+          date: getRelativeDate(4, '').split('T')[0],
+          startTime: '09:00',
+          duration: 90,
+          room: 'Hall 304',
+          seatNumber: 'Seat 14',
+          description: 'Units 1-6: Derivatives, Integrals, and Series Tests.',
+          gradeCategoryId: 'gc-calc-exam',
+          scoreEarned: null,
+          maxScore: 100,
+          status: 'upcoming',
+          topics: ['Limits and Continuity', 'Implicit Differentiation', 'Integration by Parts', 'Geometric Series', 'Ratio Test']
+        },
+        {
+          id: 'ex-2',
+          semesterId: 'sem-demo',
+          classId: 'cls-bio',
+          title: 'Unit 3 Cellular Energetics & Genetics Exam',
+          date: getRelativeDate(9, '').split('T')[0],
+          startTime: '09:30',
+          duration: 75,
+          room: 'Bio Lecture Hall B',
+          seatNumber: 'Seat 42',
+          description: 'Multiple Choice + Free Response Questions.',
+          gradeCategoryId: 'gc-bio-tests',
+          scoreEarned: null,
+          maxScore: 100,
+          status: 'upcoming',
+          topics: ['Krebs Cycle', 'Electron Transport Chain', 'Light Reactions', 'Punnett Squares']
+        }
+      ]
+    };
+  }
 
-  // --- DATA STORE CLASS ---
+  // --- ACADEMIC DATA STORE ---
   class AcademicStore {
     constructor() {
       this.listeners = new Set();
       this.data = this.loadFromStorage();
     }
 
-    getStorageKey() {
-      const key = accountManager.getActiveStorageKey();
-      return key || 'academia_pro_data_v1';
-    }
-
     loadFromStorage() {
-      try {
-        if (typeof localStorage !== 'undefined') {
-          const raw = localStorage.getItem(this.getStorageKey());
-          if (raw) {
-            const parsed = JSON.parse(raw);
+      // 1. Try to read primary storage key
+      const raw = StorageSafe.getItem(PRIMARY_STORAGE_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
             return this.validateAndMigrate(parsed);
           }
+        } catch (e) {
+          console.warn('Primary storage parse error, checking backup...', e);
         }
-      } catch (e) {
-        console.warn('Failed to parse localStorage data, loading default seed dataset.', e);
       }
-      this.saveToStorage(DEFAULT_DATA);
-      return JSON.parse(JSON.stringify(DEFAULT_DATA));
+
+      // 2. Try backup storage key
+      const backupRaw = StorageSafe.getItem(BACKUP_STORAGE_KEY);
+      if (backupRaw) {
+        try {
+          const parsedBackup = JSON.parse(backupRaw);
+          if (parsedBackup && typeof parsedBackup === 'object') {
+            return this.validateAndMigrate(parsedBackup);
+          }
+        } catch (e) {}
+      }
+
+      // 3. Try to discover any legacy data to migrate
+      const legacyKeys = ['academia_pro_data_v1', 'academia_pro_data_default'];
+      for (const lk of legacyKeys) {
+        const lRaw = StorageSafe.getItem(lk);
+        if (lRaw) {
+          try {
+            const lParsed = JSON.parse(lRaw);
+            if (lParsed && typeof lParsed === 'object') {
+              const migrated = this.validateAndMigrate(lParsed);
+              this.saveToStorage(migrated);
+              return migrated;
+            }
+          } catch (e) {}
+        }
+      }
+
+      // 4. Default: Brand new clean initial state (Zero sample data)
+      const cleanData = getEmptyInitialData('Student', '');
+      this.saveToStorage(cleanData);
+      return cleanData;
     }
 
-    saveToStorage(data) {
+    saveToStorage(dataToSave) {
+      const payload = dataToSave || this.data;
+      if (!payload) return;
       try {
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem(this.getStorageKey(), JSON.stringify(data));
-        }
+        const jsonStr = JSON.stringify(payload);
+        StorageSafe.setItem(PRIMARY_STORAGE_KEY, jsonStr);
+        StorageSafe.setItem(BACKUP_STORAGE_KEY, jsonStr);
       } catch (e) {
-        console.error('Error saving data to localStorage:', e);
+        console.error('Failed to save to localStorage:', e);
       }
-    }
-
-    reloadForAccount() {
-      this.data = this.loadFromStorage();
-      this.notify('account_switched');
     }
 
     validateAndMigrate(data) {
-      if (!data.settings) data.settings = { ...DEFAULT_DATA.settings };
-      if (!Array.isArray(data.semesters)) data.semesters = [...DEFAULT_DATA.semesters];
-      if (!Array.isArray(data.classes)) data.classes = [...DEFAULT_DATA.classes];
-      if (!Array.isArray(data.schedule)) data.schedule = [...DEFAULT_DATA.schedule];
-      if (!Array.isArray(data.assignments)) data.assignments = [...DEFAULT_DATA.assignments];
-      if (!Array.isArray(data.exams)) data.exams = [...DEFAULT_DATA.exams];
+      if (!data || typeof data !== 'object') {
+        return getEmptyInitialData('Student', '');
+      }
+      if (!data.settings) {
+        data.settings = {
+          activeSemesterId: 'sem-current',
+          theme: 'light',
+          scheduleMode: 'standard',
+          currentCycleDay: 'A',
+          studentName: 'Student',
+          schoolName: '',
+          avatarColor: AVATAR_PALETTES[0],
+          notificationsEnabled: false,
+          isProfileConfigured: false,
+        };
+      }
+      if (!data.settings.studentName) data.settings.studentName = 'Student';
+      if (!data.settings.avatarColor) data.settings.avatarColor = AVATAR_PALETTES[0];
+      if (!data.settings.theme) data.settings.theme = 'light';
+
+      if (!Array.isArray(data.semesters) || data.semesters.length === 0) {
+        const year = new Date().getFullYear();
+        data.semesters = [
+          {
+            id: 'sem-current',
+            name: `Academic Year ${year}`,
+            startDate: `${year}-01-01`,
+            endDate: `${year}-12-31`,
+            isActive: true
+          }
+        ];
+        data.settings.activeSemesterId = 'sem-current';
+      }
+      if (!data.settings.activeSemesterId) {
+        data.settings.activeSemesterId = data.semesters[0].id;
+      }
+      if (!Array.isArray(data.classes)) data.classes = [];
+      if (!Array.isArray(data.schedule)) data.schedule = [];
+      if (!Array.isArray(data.assignments)) data.assignments = [];
+      if (!Array.isArray(data.exams)) data.exams = [];
       return data;
     }
 
@@ -686,9 +470,6 @@
 
     notify(changeType, payload) {
       this.saveToStorage(this.data);
-      if (changeType !== 'cloud_realtime_update') {
-        cloud.syncToCloud(this.data);
-      }
       this.listeners.forEach(fn => fn(changeType, payload, this.data));
     }
 
@@ -698,7 +479,7 @@
 
     getActiveSemester() {
       const active = this.data.semesters.find(s => s.id === this.data.settings.activeSemesterId);
-      return active || this.data.semesters[0] || { id: 'default', name: 'Current Term' };
+      return active || this.data.semesters[0] || { id: 'sem-current', name: 'Current Term' };
     }
 
     getClasses() {
@@ -726,9 +507,11 @@
       return this.data.schedule.filter(s => classIds.has(s.classId));
     }
 
+    // --- CRUD ACTIONS ---
+
     addAssignment(assignment) {
       const newAsg = {
-        id: 'asg-' + Date.now(),
+        id: 'asg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
         semesterId: this.getActiveSemester().id,
         title: assignment.title || 'Untitled Assignment',
         description: assignment.description || '',
@@ -784,7 +567,7 @@
 
     addExam(exam) {
       const newExam = {
-        id: 'ex-' + Date.now(),
+        id: 'ex-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
         semesterId: this.getActiveSemester().id,
         title: exam.title || 'Untitled Exam',
         classId: exam.classId || '',
@@ -827,14 +610,14 @@
 
     addClass(classItem) {
       const newClass = {
-        id: 'cls-' + Date.now(),
+        id: 'cls-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
         semesterId: this.getActiveSemester().id,
         name: classItem.name || 'New Course',
         code: classItem.code || '',
         teacher: classItem.teacher || '',
         teacherEmail: classItem.teacherEmail || '',
         room: classItem.room || '',
-        color: classItem.color || SUBJECT_COLORS[Math.floor(Math.random() * SUBJECT_COLORS.length)],
+        color: classItem.color || SUBJECT_COLORS[this.data.classes.length % SUBJECT_COLORS.length],
         credits: Number(classItem.credits) || 3,
         gradeCategories: classItem.gradeCategories && classItem.gradeCategories.length > 0 
           ? classItem.gradeCategories 
@@ -874,7 +657,7 @@
 
     addScheduleSlot(slot) {
       const newSlot = {
-        id: 'sch-' + Date.now(),
+        id: 'sch-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
         classId: slot.classId,
         dayOfWeek: Number(slot.dayOfWeek),
         startTime: slot.startTime || '09:00',
@@ -897,15 +680,27 @@
       this.notify('settings_updated', this.data.settings);
     }
 
-    resetToSampleData() {
-      this.data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    resetToEmptyData() {
+      const sName = this.data.settings.studentName || 'Student';
+      const sSchool = this.data.settings.schoolName || '';
+      this.data = getEmptyInitialData(sName, sSchool);
       this.saveToStorage(this.data);
       this.notify('data_reset', this.data);
     }
 
+    loadDemoDataPreset() {
+      const sName = this.data.settings.studentName || 'Alex Morgan';
+      const sSchool = this.data.settings.schoolName || 'Westwood Academy';
+      this.data = getSampleDemoData(sName, sSchool);
+      this.saveToStorage(this.data);
+      this.notify('demo_data_loaded', this.data);
+    }
+
+    // --- ACADEMIC CALCULATIONS & GRADE ENGINE ---
+
     calculateClassGrade(classId) {
       const cls = this.getClassById(classId);
-      if (!cls) return { score: null, letter: 'N/A', categories: [] };
+      if (!cls) return { score: null, letter: 'N/A', gpaPoints: 0, categories: [], totalWeightUsed: 0 };
 
       const classAsgs = this.getAssignments().filter(a => a.classId === classId && a.scoreEarned !== null);
       const classExams = this.getExams().filter(e => e.classId === classId && e.scoreEarned !== null);
@@ -959,7 +754,7 @@
 
     calculateOverallGPA() {
       const classes = this.getClasses();
-      if (classes.length === 0) return { gpa: 0.0, totalCredits: 0, gradedCount: 0 };
+      if (classes.length === 0) return { gpa: null, totalCredits: 0, gradedCount: 0 };
 
       let totalPoints = 0;
       let totalCredits = 0;
@@ -975,9 +770,9 @@
         }
       });
 
-      const gpa = totalCredits > 0 ? (totalPoints / totalCredits) : 4.0;
+      const gpa = totalCredits > 0 ? (totalPoints / totalCredits) : null;
       return {
-        gpa: Math.round(gpa * 100) / 100,
+        gpa: gpa !== null ? Math.round(gpa * 100) / 100 : null,
         totalCredits,
         gradedCount
       };
@@ -986,12 +781,11 @@
     simulateWhatIfGrade(classId, targetOverallScore, upcomingCategoryWeight) {
       const current = this.calculateClassGrade(classId);
       if (!current || current.score === null) {
-        return { requiredScore: targetOverallScore, isFeasible: true };
+        return { requiredScore: targetOverallScore, isFeasible: true, currentScore: null, targetScore: targetOverallScore, weightUsed: upcomingCategoryWeight || 20 };
       }
 
       const currentWeight = current.totalWeightUsed;
-      const remainingWeight = 100 - currentWeight;
-      const weightToUse = upcomingCategoryWeight || remainingWeight || 20;
+      const weightToUse = upcomingCategoryWeight || (100 - currentWeight) || 20;
 
       const totalNewWeight = currentWeight + weightToUse;
       const requiredScore = (targetOverallScore * (totalNewWeight / 100) - (current.score * (currentWeight / 100))) / (weightToUse / 100);
@@ -1041,10 +835,10 @@
       const lines = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
-        'PRODID:-//Academia Pro//School Helper & Planner//EN',
+        'PRODID:-//Academia Pro//Student Planner//EN',
         'CALSCALE:GREGORIAN',
         'METHOD:PUBLISH',
-        'X-WR-CALNAME:Academia Pro Academic Schedule'
+        'X-WR-CALNAME:Academia Pro Academic Calendar'
       ];
 
       const asgs = this.getAssignments();
@@ -1057,11 +851,11 @@
         const formattedDt = dt.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 
         lines.push('BEGIN:VEVENT');
-        lines.push(`UID:asg-${a.id}@academiapro.app`);
+        lines.push(`UID:asg-${a.id}@academiapro.local`);
         lines.push(`DTSTAMP:${formattedDt}`);
         lines.push(`DTSTART:${formattedDt}`);
         lines.push(`DTEND:${formattedDt}`);
-        lines.push(`SUMMARY:[${cls ? cls.name : 'School'}] ${a.title}`);
+        lines.push(`SUMMARY:[${cls ? cls.name : 'Task'}] ${a.title}`);
         lines.push(`DESCRIPTION:${(a.description || '').replace(/\n/g, '\\n')}`);
         lines.push('STATUS:CONFIRMED');
         lines.push('END:VEVENT');
@@ -1077,11 +871,11 @@
         const fmtEnd = endDt.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 
         lines.push('BEGIN:VEVENT');
-        lines.push(`UID:exam-${e.id}@academiapro.app`);
+        lines.push(`UID:exam-${e.id}@academiapro.local`);
         lines.push(`DTSTAMP:${fmtStart}`);
         lines.push(`DTSTART:${fmtStart}`);
         lines.push(`DTEND:${fmtEnd}`);
-        lines.push(`SUMMARY:📝 EXAM: [${cls ? cls.name : 'School'}] ${e.title}`);
+        lines.push(`SUMMARY:📝 [${cls ? cls.name : 'Course'}] Exam: ${e.title}`);
         lines.push(`LOCATION:${e.room || ''}`);
         lines.push(`DESCRIPTION:${(e.description || '').replace(/\n/g, '\\n')}`);
         lines.push('STATUS:CONFIRMED');
@@ -1101,6 +895,7 @@
     calendarDate: new Date(),
     calendarViewMode: 'month',
     searchQuery: '',
+    assignmentViewMode: 'list', // 'list' | 'kanban'
     filters: {
       assignmentStatus: 'all',
       assignmentClass: 'all',
@@ -1116,249 +911,38 @@
   let elements = {};
 
   function initApp() {
-    // Check if user is logged into a local account
-    if (!accountManager.isLoggedIn()) {
-      showWelcomeScreen();
-      return;
-    }
-
-    // Sync the store's student name from the account
-    const acct = accountManager.getActiveAccount();
-    if (acct) {
-      const currentSettings = store.getState().settings;
-      if (currentSettings.studentName !== acct.name || currentSettings.schoolName !== acct.schoolName) {
-        store.data.settings.studentName = acct.name;
-        store.data.settings.schoolName = acct.schoolName || currentSettings.schoolName;
-        store.saveToStorage(store.data);
-      }
-    }
-
-    hideWelcomeScreen();
     cacheDOMElements();
     initTheme();
     bindGlobalEvents();
     setupKeyboardShortcuts();
     setupStoreSubscription();
-    setupCloudAuthSubscription();
-    updateSidebarUserFromAccount();
+    updateSidebarUser();
     
+    // Automatic persistence hooks
+    window.addEventListener('beforeunload', () => store.saveToStorage());
+    window.addEventListener('pagehide', () => store.saveToStorage());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') store.saveToStorage();
+    });
+
     // Initial Route
     navigateTo('dashboard');
     checkDueSoonReminders();
   }
 
-  // --- WELCOME / LOGIN SCREEN ---
-  function showWelcomeScreen() {
-    // Remove any existing welcome screen
-    let existing = document.getElementById('welcome-screen');
-    if (existing) existing.remove();
+  function updateSidebarUser() {
+    const data = store.getState();
+    const studentName = data.settings.studentName || 'Student';
+    const initials = studentName.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+    const avatarColor = data.settings.avatarColor || AVATAR_PALETTES[0];
 
-    const existingAccounts = accountManager.accounts;
-    const hasExistingAccounts = existingAccounts.length > 0;
-
-    const accountCardsHTML = existingAccounts.map(acct => `
-      <button class="welcome-account-card" data-account-id="${acct.id}">
-        <div class="welcome-account-avatar" style="background:${acct.avatarColor}">${acct.initials}</div>
-        <div class="welcome-account-info">
-          <span class="welcome-account-name">${acct.name}</span>
-          <span class="welcome-account-school">${acct.schoolName || 'Student'}</span>
-        </div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-muted);flex-shrink:0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
-      </button>
-    `).join('');
-
-    const avatarColors = [
-      'linear-gradient(135deg, #f59e0b, #ec4899)',
-      'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-      'linear-gradient(135deg, #10b981, #06b6d4)',
-      'linear-gradient(135deg, #ef4444, #f97316)',
-      'linear-gradient(135deg, #6366f1, #ec4899)',
-      'linear-gradient(135deg, #14b8a6, #3b82f6)',
-      'linear-gradient(135deg, #8b5cf6, #f43f5e)',
-      'linear-gradient(135deg, #f97316, #eab308)'
-    ];
-    const colorOptionsHTML = avatarColors.map((c, i) => `
-      <button class="avatar-color-option ${i === 0 ? 'selected' : ''}" data-color="${c}" style="background:${c};" title="Color ${i + 1}"></button>
-    `).join('');
-
-    const overlay = document.createElement('div');
-    overlay.id = 'welcome-screen';
-    overlay.className = 'welcome-screen';
-    overlay.innerHTML = `
-      <div class="welcome-container">
-        <div class="welcome-brand">
-          <div class="welcome-brand-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-            </svg>
-          </div>
-          <h1 class="welcome-title">AcademiaPro</h1>
-          <p class="welcome-tagline">Your personal academic planner & homework tracker</p>
-        </div>
-
-        ${hasExistingAccounts ? `
-          <div class="welcome-section" id="welcome-existing-section">
-            <h2 class="welcome-section-title">Welcome back</h2>
-            <p class="welcome-section-desc">Select your account to continue</p>
-            <div class="welcome-accounts-list">
-              ${accountCardsHTML}
-            </div>
-            <button class="welcome-link-btn" id="btn-show-create-form">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              Create a new account
-            </button>
-          </div>
-        ` : ''}
-
-        <div class="welcome-section ${hasExistingAccounts ? 'hidden' : ''}" id="welcome-create-section">
-          <h2 class="welcome-section-title">${hasExistingAccounts ? 'New Account' : 'Get Started'}</h2>
-          <p class="welcome-section-desc">${hasExistingAccounts ? 'Create another local account' : 'Create a local account — your data stays on this device'}</p>
-          
-          <form id="form-create-account" class="welcome-form">
-            <div class="welcome-avatar-preview-row">
-              <div class="welcome-avatar-preview" id="avatar-preview" style="background:${avatarColors[0]};">ST</div>
-              <div class="avatar-color-picker">
-                <span class="avatar-color-label">Pick your color</span>
-                <div class="avatar-color-options">
-                  ${colorOptionsHTML}
-                </div>
-              </div>
-            </div>
-
-            <div class="welcome-form-group">
-              <label class="welcome-form-label">Your Name <span style="color:var(--danger)">*</span></label>
-              <input type="text" class="welcome-form-input" id="create-account-name" placeholder="e.g. Alex Morgan" required autocomplete="name" maxlength="60" />
-            </div>
-
-            <div class="welcome-form-group">
-              <label class="welcome-form-label">School / University</label>
-              <input type="text" class="welcome-form-input" id="create-account-school" placeholder="e.g. Westwood Academy" maxlength="100" />
-            </div>
-
-            <button type="submit" class="welcome-submit-btn" id="btn-create-account">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              Create Account & Start
-            </button>
-
-            ${hasExistingAccounts ? `
-              <button type="button" class="welcome-link-btn" id="btn-back-to-accounts">
-                ← Back to accounts
-              </button>
-            ` : ''}
-          </form>
-        </div>
-
-        <p class="welcome-footer-note">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-          All data is stored locally on this device via your browser.
-        </p>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-    document.getElementById('app-container').style.display = 'none';
-
-    // Wire up events
-    let selectedColor = avatarColors[0];
-
-    // Avatar color picker
-    overlay.querySelectorAll('.avatar-color-option').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        overlay.querySelectorAll('.avatar-color-option').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        selectedColor = btn.getAttribute('data-color');
-        const preview = document.getElementById('avatar-preview');
-        if (preview) preview.style.background = selectedColor;
-      });
-    });
-
-    // Live initials preview
-    const nameInput = document.getElementById('create-account-name');
-    if (nameInput) {
-      nameInput.addEventListener('input', () => {
-        const val = nameInput.value.trim();
-        const initials = val.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
-        const preview = document.getElementById('avatar-preview');
-        if (preview) preview.textContent = initials;
-      });
-    }
-
-    // Show create form toggle
-    const showCreateBtn = document.getElementById('btn-show-create-form');
-    if (showCreateBtn) {
-      showCreateBtn.addEventListener('click', () => {
-        document.getElementById('welcome-existing-section').classList.add('hidden');
-        document.getElementById('welcome-create-section').classList.remove('hidden');
-        const nameField = document.getElementById('create-account-name');
-        if (nameField) nameField.focus();
-      });
-    }
-
-    // Back to accounts
-    const backBtn = document.getElementById('btn-back-to-accounts');
-    if (backBtn) {
-      backBtn.addEventListener('click', () => {
-        document.getElementById('welcome-create-section').classList.add('hidden');
-        document.getElementById('welcome-existing-section').classList.remove('hidden');
-      });
-    }
-
-    // Click existing account
-    overlay.querySelectorAll('.welcome-account-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const accountId = card.getAttribute('data-account-id');
-        accountManager.switchAccount(accountId);
-        store.reloadForAccount();
-        initApp();
-      });
-    });
-
-    // Create account form
-    const form = document.getElementById('form-create-account');
-    if (form) {
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const name = document.getElementById('create-account-name').value.trim();
-        const school = document.getElementById('create-account-school').value.trim();
-
-        if (!name) return;
-
-        const account = accountManager.createAccount(name, school, selectedColor);
-
-        // Migrate legacy data if this is the first account and legacy data exists
-        if (accountManager.accounts.length === 1) {
-          accountManager.migrateLegacyData(account.id);
-        }
-
-        // Reload store with new account's storage key
-        store.reloadForAccount();
-
-        // Set the student name in the data
-        store.updateSettings({ studentName: name, schoolName: school || 'My School' });
-
-        initApp();
-      });
-    }
-  }
-
-  function hideWelcomeScreen() {
-    const ws = document.getElementById('welcome-screen');
-    if (ws) ws.remove();
-    document.getElementById('app-container').style.display = '';
-  }
-
-  function updateSidebarUserFromAccount() {
-    const acct = accountManager.getActiveAccount();
-    if (!acct) return;
-    if (elements.userNameDisplay) elements.userNameDisplay.textContent = acct.name;
+    if (elements.userNameDisplay) elements.userNameDisplay.textContent = studentName;
     if (elements.userAvatarDisplay) {
-      elements.userAvatarDisplay.textContent = acct.initials;
-      elements.userAvatarDisplay.style.background = acct.avatarColor;
+      elements.userAvatarDisplay.textContent = initials;
+      elements.userAvatarDisplay.style.background = avatarColor;
     }
     if (elements.userStatusDisplay) {
-      elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot saved"></span> Saved Locally`;
+      elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot saved"></span> Local Workspace`;
     }
   }
 
@@ -1369,6 +953,7 @@
       mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
       themeToggleBtn: document.getElementById('theme-toggle-btn'),
       notificationBtn: document.getElementById('notification-btn'),
+      headerNotificationDot: document.getElementById('header-notification-dot'),
       headerAuthBtn: document.getElementById('header-auth-btn'),
       sidebarUserCard: document.getElementById('sidebar-user-card'),
       sidebarAuthBtn: document.getElementById('sidebar-auth-btn'),
@@ -1396,8 +981,8 @@
     const icon = elements.themeToggleBtn ? elements.themeToggleBtn.querySelector('.theme-icon') : null;
     if (icon) {
       icon.innerHTML = theme === 'dark' 
-        ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
-        : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+        ? `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
+        : `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
     }
   }
 
@@ -1423,7 +1008,7 @@
 
     if (elements.mobileMenuToggle) {
       elements.mobileMenuToggle.addEventListener('click', () => {
-        elements.sidebar.classList.toggle('mobile-open');
+        elements.sidebar?.classList.toggle('mobile-open');
       });
     }
 
@@ -1435,17 +1020,17 @@
       elements.quickAddBtn.addEventListener('click', () => openQuickAddModal());
     }
 
-    // Account modals
+    // Profile Modals
     if (elements.headerAuthBtn) {
-      elements.headerAuthBtn.addEventListener('click', () => openAccountModal());
+      elements.headerAuthBtn.addEventListener('click', () => openProfileModal());
     }
     if (elements.sidebarUserCard) {
-      elements.sidebarUserCard.addEventListener('click', () => openAccountModal());
+      elements.sidebarUserCard.addEventListener('click', () => openProfileModal());
     }
     if (elements.sidebarAuthBtn) {
       elements.sidebarAuthBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        openAccountModal();
+        openProfileModal();
       });
     }
 
@@ -1462,7 +1047,7 @@
       populateSemesterSelector();
       elements.semesterSelect.addEventListener('change', (e) => {
         store.updateSettings({ activeSemesterId: e.target.value });
-        showToast(`Switched active term to ${elements.semesterSelect.options[elements.semesterSelect.selectedIndex].text}`, 'info');
+        showToast(`Active term: ${elements.semesterSelect.options[elements.semesterSelect.selectedIndex].text}`, 'info');
         refreshCurrentView();
       });
     }
@@ -1478,7 +1063,7 @@
     window.addEventListener('keydown', (e) => {
       if (e.key === '/' && document.activeElement !== elements.globalSearchInput && !state.modalContext) {
         e.preventDefault();
-        if (elements.globalSearchInput) elements.globalSearchInput.focus();
+        elements.globalSearchInput?.focus();
       }
       if ((e.key === 'q' || e.key === 'Q') && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA' && !state.modalContext) {
         e.preventDefault();
@@ -1492,43 +1077,10 @@
 
   function setupStoreSubscription() {
     store.subscribe(() => {
+      updateSidebarUser();
       updateBadges();
       refreshCurrentView();
     });
-  }
-
-  function setupCloudAuthSubscription() {
-    cloud.onStatusChange(status => {
-      updateUserSidebarUI(status);
-    });
-  }
-
-  function updateUserSidebarUI(status) {
-    if (!elements.userNameDisplay || !elements.userStatusDisplay) return;
-
-    if (status.isAuthenticated && status.user) {
-      const email = status.user.email || 'Student';
-      const name = status.user.displayName || email.split('@')[0];
-      const initials = name.slice(0, 2).toUpperCase();
-
-      elements.userNameDisplay.textContent = name;
-      elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot synced"></span> ☁️ Synced`;
-      if (elements.userAvatarDisplay) elements.userAvatarDisplay.textContent = initials;
-    } else {
-      // Use local account info
-      updateSidebarUserFromAccount();
-    }
-  }
-
-  function updateCloudStatusDot(statusType) {
-    if (!elements.userStatusDisplay) return;
-    if (statusType === 'syncing') {
-      elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot syncing"></span> Syncing...`;
-    } else if (statusType === 'synced') {
-      elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot synced"></span> ☁️ Synced`;
-    } else {
-      elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot offline"></span> Local Offline`;
-    }
   }
 
   function navigateTo(viewId) {
@@ -1542,693 +1094,869 @@
       }
     });
 
-    elements.viewSections.forEach(sec => {
-      if (sec.id === `view-${viewId}`) {
-        sec.classList.add('active');
-      } else {
-        sec.classList.remove('active');
-      }
+    document.querySelectorAll('.view-section').forEach(sec => {
+      sec.classList.remove('active');
     });
 
-    refreshCurrentView();
-    updateBadges();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const targetSec = document.getElementById('view-' + viewId);
+    if (targetSec) {
+      targetSec.classList.add('active');
+      refreshCurrentView();
+    }
   }
 
   function refreshCurrentView() {
+    populateSemesterSelector();
+    updateBadges();
+
     switch (state.currentView) {
       case 'dashboard': renderDashboardView(); break;
+      case 'calendar': renderCalendarView(); break;
       case 'assignments': renderAssignmentsView(); break;
       case 'exams': renderExamsView(); break;
-      case 'calendar': renderCalendarView(); break;
       case 'schedule': renderScheduleView(); break;
       case 'grades': renderGradesView(); break;
       case 'classes': renderClassesView(); break;
       case 'analytics': renderAnalyticsView(); break;
       case 'settings': renderSettingsView(); break;
-    }
-  }
-
-  function updateBadges() {
-    const asgs = store.getAssignments();
-    const exams = store.getExams();
-    const now = new Date();
-
-    const overdueCount = asgs.filter(a => a.status !== 'completed' && new Date(a.dueDate) < now).length;
-    const pendingCount = asgs.filter(a => a.status !== 'completed').length;
-    const upcomingExams = exams.filter(e => e.status === 'upcoming').length;
-
-    const badgeAsg = document.getElementById('nav-badge-assignments');
-    if (badgeAsg) {
-      badgeAsg.textContent = pendingCount;
-      badgeAsg.className = overdueCount > 0 ? 'nav-badge danger' : 'nav-badge';
-    }
-
-    const badgeExams = document.getElementById('nav-badge-exams');
-    if (badgeExams) {
-      badgeExams.textContent = upcomingExams;
+      default: renderDashboardView(); break;
     }
   }
 
   function populateSemesterSelector() {
     if (!elements.semesterSelect) return;
     const data = store.getState();
-    elements.semesterSelect.innerHTML = data.semesters.map(s => `
+    const semesters = data.semesters || [];
+    
+    elements.semesterSelect.innerHTML = semesters.map(s => `
       <option value="${s.id}" ${s.id === data.settings.activeSemesterId ? 'selected' : ''}>
-        ${s.name} ${s.isActive ? '(Current)' : ''}
+        ${s.name}
       </option>
     `).join('');
   }
 
-  // --- DASHBOARD VIEW ---
+  function updateBadges() {
+    const assignments = store.getAssignments().filter(a => a.status !== 'completed');
+    const badgeAsg = document.getElementById('nav-badge-assignments');
+    if (badgeAsg) {
+      badgeAsg.textContent = assignments.length;
+      badgeAsg.className = 'nav-badge' + (assignments.some(a => isOverdue(a.dueDate)) ? ' danger' : '');
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const upcomingExams = store.getExams().filter(e => e.date >= todayStr);
+    const badgeExams = document.getElementById('nav-badge-exams');
+    if (badgeExams) {
+      badgeExams.textContent = upcomingExams.length;
+    }
+  }
+
+  function isOverdue(dueDateString) {
+    if (!dueDateString) return false;
+    return new Date(dueDateString).getTime() < Date.now();
+  }
+
+  function getDaysUntil(dateString) {
+    const target = new Date(dateString).getTime();
+    const now = Date.now();
+    const diff = target - now;
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }
+
+  function formatRelativeDueDate(dateString) {
+    if (!dateString) return 'No due date';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+
+    const days = getDaysUntil(dateString);
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (days < 0) {
+      const pastDays = Math.abs(days);
+      return `<span style="color:var(--danger-text);font-weight:700;">Overdue by ${pastDays} day${pastDays > 1 ? 's' : ''}</span>`;
+    }
+    if (days === 0) {
+      return `<span style="color:var(--warning-text);font-weight:700;">Due Today (${timeStr})</span>`;
+    }
+    if (days === 1) {
+      return `<span style="color:var(--info-text);font-weight:600;">Due Tomorrow (${timeStr})</span>`;
+    }
+    if (days <= 7) {
+      return `<span>Due in ${days} days (${date.toLocaleDateString([], { weekday: 'short' })})</span>`;
+    }
+    return `<span>Due ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>`;
+  }
+
+  // --- VIEW: DASHBOARD ---
   function renderDashboardView() {
     const container = document.getElementById('view-dashboard');
     if (!container) return;
 
+    const activeSem = store.getActiveSemester();
+    const classes = store.getClasses();
     const assignments = store.getAssignments();
     const exams = store.getExams();
-    const gpaInfo = store.calculateOverallGPA();
-    const now = new Date();
+    const schedule = store.getSchedule();
+    const gpaData = store.calculateOverallGPA();
 
-    const activeTasks = assignments.filter(a => a.status !== 'completed');
-    const completedTasks = assignments.filter(a => a.status === 'completed');
-    const overdueTasks = activeTasks.filter(a => new Date(a.dueDate) < now);
-    const completionRate = assignments.length > 0 ? Math.round((completedTasks.length / assignments.length) * 100) : 0;
-    const upcomingExams = exams.filter(e => e.status === 'upcoming');
+    const pendingAssignments = assignments.filter(a => a.status !== 'completed');
+    const overdueCount = pendingAssignments.filter(a => isOverdue(a.dueDate)).length;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const upcomingExams = exams.filter(e => e.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date));
 
-    const next7Days = new Date();
-    next7Days.setDate(next7Days.getDate() + 7);
-    const dueSoonTasks = activeTasks.filter(a => {
-      const d = new Date(a.dueDate);
-      return d >= now && d <= next7Days;
-    }).sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    // Time-based greeting
+    const hour = new Date().getHours();
+    const greetingText = hour < 12 ? 'Good morning' : (hour < 18 ? 'Good afternoon' : 'Good evening');
+    const studentName = store.getState().settings.studentName || 'Student';
 
-    const todayDay = now.getDay();
-    const todaySchedule = store.getSchedule()
-      .filter(s => s.dayOfWeek === todayDay)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    // Clean slate check (0 classes & 0 tasks)
+    const isCleanSlate = classes.length === 0 && assignments.length === 0;
 
-    container.innerHTML = `
+    let dashboardHTML = `
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">
+            ${greetingText}, ${studentName}
+          </h1>
+          <p class="section-subtitle">${new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })} · ${activeSem.name}</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn-primary" id="dash-quick-add-task">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>+ Add Task</span>
+          </button>
+          <button class="btn-secondary" id="dash-quick-add-exam">
+            <span>+ Add Exam</span>
+          </button>
+          <button class="btn-secondary" id="dash-quick-add-class">
+            <span>+ Add Course</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Top Summary Metrics -->
       <div class="stat-cards-grid">
         <div class="stat-card">
           <div class="stat-icon-wrapper blue">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
           </div>
           <div class="stat-content">
-            <span class="stat-label">Cumulative GPA</span>
-            <span class="stat-value">${gpaInfo.gpa.toFixed(2)}</span>
-            <span class="stat-subtext">${gpaInfo.gradedCount} courses graded</span>
+            <span class="stat-label">Active Tasks</span>
+            <div class="stat-value">${pendingAssignments.length}</div>
+            <span class="stat-subtext">
+              ${overdueCount > 0 ? `<b style="color:var(--danger-text)">${overdueCount} overdue</b>` : 'All on track'}
+            </span>
           </div>
         </div>
 
         <div class="stat-card">
           <div class="stat-icon-wrapper amber">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          </div>
-          <div class="stat-content">
-            <span class="stat-label">Pending Tasks</span>
-            <span class="stat-value">${activeTasks.length}</span>
-            <span class="stat-subtext">${overdueTasks.length > 0 ? `<b style="color:var(--danger)">${overdueTasks.length} overdue</b>` : 'All caught up'}</span>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon-wrapper purple">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
           </div>
           <div class="stat-content">
             <span class="stat-label">Upcoming Exams</span>
-            <span class="stat-value">${upcomingExams.length}</span>
-            <span class="stat-subtext">${upcomingExams.length > 0 ? `Next: in ${getDaysDiff(new Date(), new Date(upcomingExams[0].date))} days` : 'No exams booked'}</span>
+            <div class="stat-value">${upcomingExams.length}</div>
+            <span class="stat-subtext">
+              ${upcomingExams.length > 0 ? `Next: in ${getDaysUntil(upcomingExams[0].date)}d` : 'No upcoming tests'}
+            </span>
           </div>
         </div>
 
         <div class="stat-card">
           <div class="stat-icon-wrapper emerald">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
           </div>
           <div class="stat-content">
-            <span class="stat-label">Completion Rate</span>
-            <span class="stat-value">${completionRate}%</span>
-            <span class="stat-subtext">${completedTasks.length} of ${assignments.length} done</span>
+            <span class="stat-label">Cumulative GPA</span>
+            <div class="stat-value">
+              ${gpaData.gpa !== null ? gpaData.gpa.toFixed(2) : '—'}
+            </div>
+            <span class="stat-subtext">
+              ${gpaData.gpa !== null ? `Scale: 4.00 (${store.percentageToLetter((gpaData.gpa / 4) * 100)})` : 'Add graded work'}
+            </span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon-wrapper purple">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-label">Enrolled Courses</span>
+            <div class="stat-value">${classes.length}</div>
+            <span class="stat-subtext">${activeSem.name}</span>
           </div>
         </div>
       </div>
+    `;
 
-      <div class="dashboard-grid">
-        <div class="dashboard-main-col">
-          ${overdueTasks.length > 0 ? `
-            <div class="card-panel" style="border-color: var(--danger); background: var(--danger-light);">
-              <div class="panel-header" style="margin-bottom:0.75rem;">
-                <span class="panel-title" style="color: var(--danger);">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                  Action Required: ${overdueTasks.length} Overdue Assignment${overdueTasks.length > 1 ? 's' : ''}
-                </span>
-              </div>
-              ${overdueTasks.map(t => renderTaskItemHTML(t)).join('')}
+    // Onboarding Guide Card when Clean Slate
+    if (isCleanSlate) {
+      dashboardHTML += `
+        <div class="onboarding-guide-card">
+          <div class="onboarding-header">
+            <h2 class="onboarding-title">
+              <span>✨</span> Setup your Academic Workspace
+            </h2>
+            <button class="btn-ghost" id="btn-load-demo-data" title="Load sample courses and tasks to test">
+              <span>✨ Load Demo Data</span>
+            </button>
+          </div>
+          <p style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+            Your workspace is ready and starts clean with zero sample data. Follow these quick steps to get organized:
+          </p>
+          <div class="onboarding-steps-grid">
+            <div class="onboarding-step-item">
+              <span class="step-badge">Step 1</span>
+              <div class="step-title">Add your Courses</div>
+              <div class="step-desc">Enter your classes (Calculus, Chemistry, Literature, etc.) with custom color tags.</div>
+              <button class="btn-primary" id="btn-onboard-add-class" style="margin-top:auto; width:100%; justify-content:center;">
+                + Add First Course
+              </button>
             </div>
-          ` : ''}
 
-          <div class="card-panel">
-            <div class="panel-header">
-              <span class="panel-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                Upcoming Deadlines (Next 7 Days)
-              </span>
-              <a href="#" class="panel-action-link" data-nav-target="assignments">View All Assignments →</a>
+            <div class="onboarding-step-item">
+              <span class="step-badge">Step 2</span>
+              <div class="step-title">Track Assignments</div>
+              <div class="step-desc">Log homework, essays, and lab deadlines with subtasks and priority tags.</div>
+              <button class="btn-secondary" id="btn-onboard-add-task" style="margin-top:auto; width:100%; justify-content:center;">
+                + Add Assignment
+              </button>
             </div>
-            
-            <div class="tasks-list-container">
-              ${dueSoonTasks.length > 0 
-                ? dueSoonTasks.map(t => renderTaskItemHTML(t)).join('')
-                : `<div style="text-align:center; padding: 2rem; color: var(--text-muted);">
-                     <p>🎉 No assignments due in the next 7 days!</p>
-                   </div>`
-              }
+
+            <div class="onboarding-step-item">
+              <span class="step-badge">Step 3</span>
+              <div class="step-title">Schedule Exams</div>
+              <div class="step-desc">Set midterm and final dates with countdown timers and study topic checklists.</div>
+              <button class="btn-secondary" id="btn-onboard-add-exam" style="margin-top:auto; width:100%; justify-content:center;">
+                + Schedule Exam
+              </button>
             </div>
           </div>
         </div>
+      `;
+    }
 
-        <div class="dashboard-side-col">
+    // Two column layout
+    dashboardHTML += `
+      <div class="dashboard-grid">
+        <!-- Left Main Column -->
+        <div>
+          <!-- Priority Tasks List -->
           <div class="card-panel">
             <div class="panel-header">
-              <span class="panel-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                Today's Schedule (${getDayName(todayDay)})
-              </span>
-              <a href="#" class="panel-action-link" data-nav-target="schedule">Timetable →</a>
+              <h3 class="panel-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                Upcoming Deadlines
+              </h3>
+              <a href="#assignments" class="panel-action-link" data-nav-target="assignments">View all tasks →</a>
             </div>
 
-            <div class="today-schedule-list">
-              ${todaySchedule.length > 0 ? todaySchedule.map(slot => {
-                const cls = store.getClassById(slot.classId);
-                return `
-                  <div style="display:flex; align-items:center; gap:0.75rem; padding:0.75rem 0; border-bottom:1px solid var(--border-subtle);">
-                    <div style="width:4px; height:36px; border-radius:2px; background:${cls ? cls.color : 'var(--accent)'};"></div>
-                    <div style="flex:1;">
-                      <div style="font-weight:600; font-size:0.875rem; color:var(--text-primary);">${cls ? cls.name : 'Class'}</div>
-                      <div style="font-size:0.75rem; color:var(--text-secondary);">${slot.startTime} - ${slot.endTime} • ${slot.room ? `Room ${slot.room}` : (cls ? cls.room : '')}</div>
-                    </div>
-                  </div>
-                `;
-              }).join('') : `
-                <div style="text-align:center; padding:1.5rem 0; color:var(--text-muted); font-size:0.875rem;">
-                  No classes scheduled for today.
+            <div id="dash-tasks-list">
+              ${pendingAssignments.length > 0 ? pendingAssignments.slice(0, 5).map(task => renderTaskItemHTML(task)).join('') : `
+                <div class="empty-state-box">
+                  <div class="empty-state-icon">✓</div>
+                  <div class="empty-state-title">No pending deadlines</div>
+                  <p class="empty-state-desc">You are completely caught up! Add a new homework assignment or project when ready.</p>
+                  <button class="btn-primary" id="btn-empty-add-task">+ Create Assignment</button>
                 </div>
               `}
             </div>
           </div>
 
+          <!-- Today's Schedule Matrix snippet -->
           <div class="card-panel">
             <div class="panel-header">
-              <span class="panel-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                Next Exams
-              </span>
-              <a href="#" class="panel-action-link" data-nav-target="exams">All Exams →</a>
+              <h3 class="panel-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                Today's Class Schedule
+              </h3>
+              <a href="#schedule" class="panel-action-link" data-nav-target="schedule">Full timetable →</a>
             </div>
 
-            <div class="upcoming-exams-list">
-              ${upcomingExams.slice(0, 3).map(e => {
-                const cls = store.getClassById(e.classId);
-                const daysLeft = getDaysDiff(new Date(), new Date(e.date));
+            <div id="dash-schedule-today">
+              ${(() => {
+                const todayDay = new Date().getDay(); // 0=Sun, 1=Mon...
+                const todaySlots = schedule.filter(s => s.dayOfWeek === todayDay);
+                if (todaySlots.length === 0) {
+                  return `
+                    <div style="padding:1.25rem; text-align:center; color:var(--text-muted); font-size:0.8125rem;">
+                      No classes scheduled for today.
+                    </div>
+                  `;
+                }
+                return todaySlots.map(slot => {
+                  const cls = store.getClassById(slot.classId);
+                  return `
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding:0.625rem 0.75rem; background:var(--bg-surface-subtle); border-radius:var(--radius-md); margin-bottom:0.5rem; border-left:4px solid ${cls ? cls.color : 'var(--accent)'};">
+                      <div>
+                        <div style="font-weight:700; font-size:0.875rem; color:var(--text-primary);">${cls ? cls.name : 'Class'}</div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary);">${slot.room ? `Room ${slot.room} · ` : ''}${cls && cls.teacher ? cls.teacher : ''}</div>
+                      </div>
+                      <div style="font-family:var(--font-mono); font-size:0.75rem; font-weight:700; color:var(--text-primary); background:var(--bg-surface); padding:0.25rem 0.5rem; border-radius:var(--radius-sm); border:1px solid var(--border-default);">
+                        ${slot.startTime} - ${slot.endTime}
+                      </div>
+                    </div>
+                  `;
+                }).join('');
+              })()}
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column -->
+        <div>
+          <!-- Upcoming Exams Widget -->
+          <div class="card-panel">
+            <div class="panel-header">
+              <h3 class="panel-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path></svg>
+                Exams Countdown
+              </h3>
+              <a href="#exams" class="panel-action-link" data-nav-target="exams">View all →</a>
+            </div>
+
+            <div>
+              ${upcomingExams.length > 0 ? upcomingExams.slice(0, 3).map(exam => {
+                const cls = store.getClassById(exam.classId);
+                const days = getDaysUntil(exam.date);
                 return `
-                  <div style="padding:0.75rem 0; border-bottom:1px solid var(--border-subtle);">
+                  <div style="padding:0.75rem; background:var(--bg-surface-subtle); border-radius:var(--radius-md); margin-bottom:0.5rem; border:1px solid var(--border-subtle);">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.25rem;">
-                      <span style="font-weight:600; font-size:0.875rem; color:var(--text-primary);">${e.title}</span>
-                      <span class="countdown-badge" style="font-size:0.6875rem;">
-                        ${daysLeft === 0 ? 'Today!' : daysLeft === 1 ? 'Tomorrow' : `In ${daysLeft} days`}
+                      <div style="font-weight:700; font-size:0.875rem; color:var(--text-primary);">${exam.title}</div>
+                      <span class="exam-countdown-pill ${days <= 2 ? 'urgent' : (days <= 7 ? 'soon' : 'future')}">
+                        ${days === 0 ? 'Today' : (days === 1 ? 'Tomorrow' : `${days}d left`)}
                       </span>
                     </div>
                     <div style="font-size:0.75rem; color:var(--text-secondary);">
-                      ${cls ? cls.name : ''} • ${formatDate(e.date)} at ${e.startTime}
+                      ${cls ? `<span style="font-weight:600; color:${cls.color}">${cls.name}</span> · ` : ''}${new Date(exam.date).toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${exam.startTime}
                     </div>
                   </div>
                 `;
-              }).join('')}
-              ${upcomingExams.length === 0 ? `<div style="color:var(--text-muted); font-size:0.875rem; text-align:center; padding:1rem;">No upcoming tests</div>` : ''}
+              }).join('') : `
+                <div style="padding:1.25rem 0.5rem; text-align:center; color:var(--text-muted); font-size:0.8125rem;">
+                  No upcoming exams scheduled.
+                </div>
+              `}
+            </div>
+          </div>
+
+          <!-- Academic Performance Summary -->
+          <div class="card-panel">
+            <div class="panel-header">
+              <h3 class="panel-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                Course Grades
+              </h3>
+              <a href="#grades" class="panel-action-link" data-nav-target="grades">Simulator →</a>
+            </div>
+
+            <div>
+              ${classes.length > 0 ? classes.map(c => {
+                const grade = store.calculateClassGrade(c.id);
+                return `
+                  <div style="display:flex; align-items:center; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid var(--border-subtle);">
+                    <div style="display:flex; align-items:center; gap:0.5rem; min-width:0;">
+                      <div style="width:8px; height:8px; border-radius:50%; background:${c.color}; flex-shrink:0;"></div>
+                      <span style="font-size:0.8125rem; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.name}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                      <span style="font-size:0.8125rem; font-weight:700; color:var(--text-primary);">${grade.score !== null ? `${grade.score}%` : '—'}</span>
+                      <span class="badge ${grade.score >= 90 ? 'success' : (grade.score >= 80 ? 'primary' : 'neutral')}">${grade.letter}</span>
+                    </div>
+                  </div>
+                `;
+              }).join('') : `
+                <div style="padding:1.25rem 0.5rem; text-align:center; color:var(--text-muted); font-size:0.8125rem;">
+                  No courses added yet.
+                </div>
+              `}
             </div>
           </div>
         </div>
       </div>
     `;
 
-    bindTaskActionEvents(container);
+    container.innerHTML = dashboardHTML;
+
+    // Attach event listeners
+    container.querySelector('#dash-quick-add-task')?.addEventListener('click', () => openAssignmentModal());
+    container.querySelector('#dash-quick-add-exam')?.addEventListener('click', () => openExamModal());
+    container.querySelector('#dash-quick-add-class')?.addEventListener('click', () => openClassModal());
+
+    container.querySelector('#btn-onboard-add-class')?.addEventListener('click', () => openClassModal());
+    container.querySelector('#btn-onboard-add-task')?.addEventListener('click', () => openAssignmentModal());
+    container.querySelector('#btn-onboard-add-exam')?.addEventListener('click', () => openExamModal());
+    container.querySelector('#btn-empty-add-task')?.addEventListener('click', () => openAssignmentModal());
+
+    container.querySelector('#btn-load-demo-data')?.addEventListener('click', () => {
+      if (confirm('Load sample courses, assignments, and exams for demonstration?')) {
+        store.loadDemoDataPreset();
+        showToast('Demo data loaded successfully!', 'success');
+      }
+    });
+
+    bindTaskItemEvents(container);
     bindNavTargetClicks(container);
   }
 
-  // --- ASSIGNMENTS VIEW ---
-  function renderAssignmentsView() {
-    const container = document.getElementById('view-assignments');
-    if (!container) return;
-
-    const classes = store.getClasses();
-    let assignments = store.getAssignments();
-    const now = new Date();
-
-    if (state.searchQuery) {
-      assignments = assignments.filter(a => 
-        a.title.toLowerCase().includes(state.searchQuery) ||
-        (a.description && a.description.toLowerCase().includes(state.searchQuery))
-      );
-    }
-
-    if (state.filters.assignmentClass !== 'all') {
-      assignments = assignments.filter(a => a.classId === state.filters.assignmentClass);
-    }
-
-    if (state.filters.assignmentType !== 'all') {
-      assignments = assignments.filter(a => a.type === state.filters.assignmentType);
-    }
-
-    if (state.filters.assignmentPriority !== 'all') {
-      assignments = assignments.filter(a => a.priority === state.filters.assignmentPriority);
-    }
-
-    if (state.filters.assignmentStatus === 'active') {
-      assignments = assignments.filter(a => a.status !== 'completed');
-    } else if (state.filters.assignmentStatus === 'completed') {
-      assignments = assignments.filter(a => a.status === 'completed');
-    } else if (state.filters.assignmentStatus === 'overdue') {
-      assignments = assignments.filter(a => a.status !== 'completed' && new Date(a.dueDate) < now);
-    } else if (state.filters.assignmentStatus === 'due-soon') {
-      const next3Days = new Date();
-      next3Days.setDate(next3Days.getDate() + 3);
-      assignments = assignments.filter(a => a.status !== 'completed' && new Date(a.dueDate) >= now && new Date(a.dueDate) <= next3Days);
-    }
-
-    assignments.sort((a, b) => {
-      if (state.filters.assignmentSort === 'dueDate-asc') return new Date(a.dueDate) - new Date(b.dueDate);
-      if (state.filters.assignmentSort === 'dueDate-desc') return new Date(b.dueDate) - new Date(a.dueDate);
-      if (state.filters.assignmentSort === 'priority') {
-        const pWeights = { high: 3, medium: 2, low: 1 };
-        return (pWeights[b.priority] || 0) - (pWeights[a.priority] || 0);
-      }
-      if (state.filters.assignmentSort === 'title') return a.title.localeCompare(b.title);
-      return 0;
-    });
-
-    container.innerHTML = `
-      <div class="section-header">
-        <div>
-          <h1 class="section-title">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-            Assignments & Homework
-          </h1>
-          <p class="section-subtitle">Track, organize, and complete academic assignments with subtasks and progress bars.</p>
-        </div>
-        <div class="header-actions">
-          <button class="btn-primary" id="btn-add-assignment">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            New Assignment
-          </button>
-        </div>
-      </div>
-
-      <div class="filters-bar">
-        <div class="filter-group">
-          <button class="filter-pill ${state.filters.assignmentStatus === 'all' ? 'active' : ''}" data-status="all">All</button>
-          <button class="filter-pill ${state.filters.assignmentStatus === 'active' ? 'active' : ''}" data-status="active">Active</button>
-          <button class="filter-pill ${state.filters.assignmentStatus === 'due-soon' ? 'active' : ''}" data-status="due-soon">Due Soon</button>
-          <button class="filter-pill ${state.filters.assignmentStatus === 'overdue' ? 'active' : ''}" data-status="overdue">Overdue</button>
-          <button class="filter-pill ${state.filters.assignmentStatus === 'completed' ? 'active' : ''}" data-status="completed">Completed</button>
-        </div>
-
-        <div class="filter-group">
-          <select class="select-filter" id="filter-class">
-            <option value="all">All Classes</option>
-            ${classes.map(c => `<option value="${c.id}" ${state.filters.assignmentClass === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
-          </select>
-
-          <select class="select-filter" id="filter-type">
-            <option value="all">All Types</option>
-            <option value="homework" ${state.filters.assignmentType === 'homework' ? 'selected' : ''}>Homework</option>
-            <option value="essay" ${state.filters.assignmentType === 'essay' ? 'selected' : ''}>Essay</option>
-            <option value="project" ${state.filters.assignmentType === 'project' ? 'selected' : ''}>Project</option>
-            <option value="lab" ${state.filters.assignmentType === 'lab' ? 'selected' : ''}>Lab Report</option>
-            <option value="quiz" ${state.filters.assignmentType === 'quiz' ? 'selected' : ''}>Quiz</option>
-            <option value="reading" ${state.filters.assignmentType === 'reading' ? 'selected' : ''}>Reading</option>
-          </select>
-
-          <select class="select-filter" id="filter-sort">
-            <option value="dueDate-asc" ${state.filters.assignmentSort === 'dueDate-asc' ? 'selected' : ''}>Due Date (Earliest)</option>
-            <option value="dueDate-desc" ${state.filters.assignmentSort === 'dueDate-desc' ? 'selected' : ''}>Due Date (Latest)</option>
-            <option value="priority" ${state.filters.assignmentSort === 'priority' ? 'selected' : ''}>Priority (Highest)</option>
-            <option value="title" ${state.filters.assignmentSort === 'title' ? 'selected' : ''}>Title (A-Z)</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="assignments-list-container">
-        ${assignments.length > 0 
-          ? assignments.map(a => renderTaskItemHTML(a)).join('')
-          : `<div class="card-panel" style="text-align:center; padding:3.5rem; color:var(--text-muted);">
-               <p style="font-size:1.125rem; font-weight:600;">No assignments found</p>
-               <p style="font-size:0.875rem; margin-top:0.25rem;">Try adjusting your filters or create a new assignment.</p>
-             </div>`
-        }
-      </div>
-    `;
-
-    container.querySelectorAll('.filter-pill[data-status]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.filters.assignmentStatus = btn.getAttribute('data-status');
-        renderAssignmentsView();
-      });
-    });
-
-    const filterClass = container.querySelector('#filter-class');
-    if (filterClass) filterClass.addEventListener('change', (e) => {
-      state.filters.assignmentClass = e.target.value;
-      renderAssignmentsView();
-    });
-
-    const filterType = container.querySelector('#filter-type');
-    if (filterType) filterType.addEventListener('change', (e) => {
-      state.filters.assignmentType = e.target.value;
-      renderAssignmentsView();
-    });
-
-    const filterSort = container.querySelector('#filter-sort');
-    if (filterSort) filterSort.addEventListener('change', (e) => {
-      state.filters.assignmentSort = e.target.value;
-      renderAssignmentsView();
-    });
-
-    const btnAdd = container.querySelector('#btn-add-assignment');
-    if (btnAdd) btnAdd.addEventListener('click', () => openAssignmentModal());
-
-    bindTaskActionEvents(container);
-  }
-
+  // --- TASK ROW HTML HELPER ---
   function renderTaskItemHTML(task) {
     const cls = store.getClassById(task.classId);
-    const isComplete = task.status === 'completed';
-    const now = new Date();
-    const isOverdue = !isComplete && new Date(task.dueDate) < now;
-    const subtasks = task.subtasks || [];
-    const completedSubtasks = subtasks.filter(s => s.isCompleted).length;
+    const isDone = task.status === 'completed';
+    const isLate = !isDone && isOverdue(task.dueDate);
+
+    const subtaskTotal = Array.isArray(task.subtasks) ? task.subtasks.length : 0;
+    const subtaskDone = Array.isArray(task.subtasks) ? task.subtasks.filter(st => st.isCompleted).length : 0;
 
     return `
-      <div class="task-item ${isComplete ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}" data-task-id="${task.id}">
-        <input type="checkbox" class="task-checkbox" ${isComplete ? 'checked' : ''} title="Mark task completed" />
+      <div class="task-item ${isDone ? 'completed' : ''} ${isLate ? 'overdue' : ''}" data-task-id="${task.id}">
+        <input type="checkbox" class="task-checkbox" ${isDone ? 'checked' : ''} data-action="toggle-task" title="Mark complete" />
         
-        <div class="task-details">
-          <div class="task-top-row">
-            ${cls ? `
-              <span class="class-tag" style="background:${cls.color}20; color:${cls.color};">
-                ${cls.name}
-              </span>
-            ` : ''}
-            <span class="badge ${getPriorityBadgeClass(task.priority)}">${task.priority.toUpperCase()}</span>
-            <span class="badge neutral">${task.type || 'homework'}</span>
-            ${task.scoreEarned !== null ? `<span class="badge success">Grade: ${task.scoreEarned}/${task.maxScore || 100}</span>` : ''}
+        <div class="task-content">
+          <div class="task-header-row">
+            ${cls ? `<span class="task-course-pill" style="background:${cls.color}">${cls.name}</span>` : ''}
+            <span class="badge ${task.priority === 'high' ? 'danger' : (task.priority === 'medium' ? 'warning' : 'neutral')}">
+              ${task.priority}
+            </span>
+            <span style="font-size:0.6875rem; color:var(--text-muted); text-transform:uppercase; font-weight:600;">${task.type}</span>
           </div>
 
           <div class="task-title">${task.title}</div>
-          ${task.description ? `<div class="task-description">${task.description}</div>` : ''}
-
-          ${subtasks.length > 0 ? `
-            <div class="subtasks-progress-wrapper">
-              <div style="display:flex; justify-content:space-between; font-size:0.6875rem; color:var(--text-muted); font-weight:600;">
-                <span>Subtasks (${completedSubtasks}/${subtasks.length})</span>
-                <span>${Math.round((completedSubtasks / subtasks.length) * 100)}%</span>
-              </div>
-              <div class="progress-bar-container">
-                <div class="progress-bar-fill" style="width: ${(completedSubtasks / subtasks.length) * 100}%;"></div>
-              </div>
-            </div>
-          ` : ''}
+          ${task.description ? `<div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.125rem;">${task.description}</div>` : ''}
 
           <div class="task-meta-row">
-            <span class="meta-item ${isOverdue ? 'overdue' : ''}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-              ${formatDateTime(task.dueDate)} ${isOverdue ? '• Overdue!' : ''}
-            </span>
-            ${task.completionPercentage > 0 && task.completionPercentage < 100 ? `
-              <span class="meta-item">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-                ${task.completionPercentage}% Progress
-              </span>
+            <div class="task-meta-item">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              ${formatRelativeDueDate(task.dueDate)}
+            </div>
+
+            ${subtaskTotal > 0 ? `
+              <div class="task-meta-item">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                ${subtaskDone}/${subtaskTotal} subtasks
+              </div>
+            ` : ''}
+
+            ${task.scoreEarned !== null ? `
+              <div class="task-meta-item" style="color:var(--success-text); font-weight:700;">
+                ★ ${task.scoreEarned}/${task.maxScore || 100}
+              </div>
             ` : ''}
           </div>
         </div>
 
         <div class="task-actions">
-          <button class="icon-btn btn-edit-task" title="Edit Assignment">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          <button class="icon-btn" data-action="edit-task" title="Edit Assignment" style="width:28px; height:28px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
           </button>
-          <button class="icon-btn btn-delete-task" title="Delete Assignment" style="color:var(--danger);">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          <button class="icon-btn" data-action="delete-task" title="Delete Assignment" style="width:28px; height:28px; color:var(--danger);">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
           </button>
         </div>
       </div>
     `;
   }
 
-  function bindTaskActionEvents(container) {
-    container.querySelectorAll('.task-item').forEach(item => {
-      const id = item.getAttribute('data-task-id');
-      
-      const chk = item.querySelector('.task-checkbox');
-      if (chk) {
-        chk.addEventListener('change', () => {
-          store.toggleAssignmentComplete(id);
-        });
-      }
+  function bindTaskItemEvents(parent) {
+    parent.querySelectorAll('[data-action="toggle-task"]').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const taskId = e.target.closest('.task-item').getAttribute('data-task-id');
+        store.toggleAssignmentComplete(taskId);
+      });
+    });
 
-      const btnEdit = item.querySelector('.btn-edit-task');
-      if (btnEdit) {
-        btnEdit.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const asg = store.getState().assignments.find(a => a.id === id);
-          if (asg) openAssignmentModal(asg);
-        });
-      }
+    parent.querySelectorAll('[data-action="edit-task"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const taskId = e.target.closest('.task-item').getAttribute('data-task-id');
+        const task = store.getAssignments().find(a => a.id === taskId);
+        if (task) openAssignmentModal(task);
+      });
+    });
 
-      const btnDelete = item.querySelector('.btn-delete-task');
-      if (btnDelete) {
-        btnDelete.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (confirm('Are you sure you want to delete this assignment?')) {
-            store.deleteAssignment(id);
-            showToast('Assignment deleted', 'info');
-          }
-        });
-      }
+    parent.querySelectorAll('[data-action="delete-task"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const taskId = e.target.closest('.task-item').getAttribute('data-task-id');
+        if (confirm('Delete this assignment?')) {
+          store.deleteAssignment(taskId);
+          showToast('Assignment deleted', 'info');
+        }
+      });
     });
   }
 
-  // --- EXAMS VIEW ---
-  function renderExamsView() {
-    const container = document.getElementById('view-exams');
+  // --- VIEW: ASSIGNMENTS ---
+  function renderAssignmentsView() {
+    const container = document.getElementById('view-assignments');
     if (!container) return;
 
-    let exams = store.getExams();
+    const classes = store.getClasses();
+    let allAssignments = store.getAssignments();
 
-    if (state.filters.examStatus === 'upcoming') {
-      exams = exams.filter(e => e.status === 'upcoming');
-    } else if (state.filters.examStatus === 'completed') {
-      exams = exams.filter(e => e.status === 'completed');
+    // Filters
+    if (state.filters.assignmentClass !== 'all') {
+      allAssignments = allAssignments.filter(a => a.classId === state.filters.assignmentClass);
+    }
+    if (state.filters.assignmentType !== 'all') {
+      allAssignments = allAssignments.filter(a => a.type === state.filters.assignmentType);
+    }
+    if (state.filters.assignmentPriority !== 'all') {
+      allAssignments = allAssignments.filter(a => a.priority === state.filters.assignmentPriority);
+    }
+    if (state.filters.assignmentStatus === 'pending') {
+      allAssignments = allAssignments.filter(a => a.status !== 'completed');
+    } else if (state.filters.assignmentStatus === 'completed') {
+      allAssignments = allAssignments.filter(a => a.status === 'completed');
+    } else if (state.filters.assignmentStatus === 'overdue') {
+      allAssignments = allAssignments.filter(a => a.status !== 'completed' && isOverdue(a.dueDate));
     }
 
-    exams.sort((a, b) => new Date(`${a.date}T${a.startTime}`) - new Date(`${b.date}T${b.startTime}`));
+    if (state.searchQuery) {
+      allAssignments = allAssignments.filter(a => 
+        a.title.toLowerCase().includes(state.searchQuery) ||
+        (a.description && a.description.toLowerCase().includes(state.searchQuery))
+      );
+    }
+
+    // Sort
+    allAssignments.sort((a, b) => {
+      if (state.filters.assignmentSort === 'dueDate-asc') {
+        return (a.dueDate || '').localeCompare(b.dueDate || '');
+      }
+      if (state.filters.assignmentSort === 'dueDate-desc') {
+        return (b.dueDate || '').localeCompare(a.dueDate || '');
+      }
+      if (state.filters.assignmentSort === 'title-asc') {
+        return a.title.localeCompare(b.title);
+      }
+      return 0;
+    });
+
+    const isKanban = state.assignmentViewMode === 'kanban';
 
     container.innerHTML = `
       <div class="section-header">
         <div>
-          <h1 class="section-title">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            Exams & Test Schedules
-          </h1>
-          <p class="section-subtitle">Dedicated exam management with live countdowns, room locations, seat numbers, and study topics.</p>
+          <h1 class="section-title">Assignments & Deadlines</h1>
+          <p class="section-subtitle">Track homework, lab reports, reading journals, and projects.</p>
         </div>
         <div class="header-actions">
-          <button class="btn-primary" id="btn-add-exam">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Schedule Exam
+          <div style="display:flex; background:var(--bg-surface-hover); border:1px solid var(--border-default); border-radius:var(--radius-md); padding:2px;">
+            <button class="btn-ghost ${!isKanban ? 'active' : ''}" id="btn-view-list" style="padding:0.3125rem 0.625rem; font-size:0.75rem; border-radius:var(--radius-sm); ${!isKanban ? 'background:var(--bg-surface); font-weight:700;' : ''}">
+              List View
+            </button>
+            <button class="btn-ghost ${isKanban ? 'active' : ''}" id="btn-view-kanban" style="padding:0.3125rem 0.625rem; font-size:0.75rem; border-radius:var(--radius-sm); ${isKanban ? 'background:var(--bg-surface); font-weight:700;' : ''}">
+              Board View
+            </button>
+          </div>
+          <button class="btn-primary" id="btn-create-assignment">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>+ Add Task</span>
           </button>
         </div>
       </div>
 
-      <div class="filters-bar">
-        <div class="filter-group">
-          <button class="filter-pill ${state.filters.examStatus === 'upcoming' ? 'active' : ''}" data-exam-tab="upcoming">Upcoming Exams</button>
-          <button class="filter-pill ${state.filters.examStatus === 'completed' ? 'active' : ''}" data-exam-tab="completed">Completed / Graded</button>
-          <button class="filter-pill ${state.filters.examStatus === 'all' ? 'active' : ''}" data-exam-tab="all">All Tests</button>
+      <!-- Filter Controls Row -->
+      <div style="display:flex; gap:0.625rem; flex-wrap:wrap; margin-bottom:1.25rem; align-items:center;">
+        <select class="form-control" id="asg-filter-class" style="width:auto; min-width:140px; padding:0.375rem 0.625rem; font-size:0.8125rem;">
+          <option value="all">All Courses</option>
+          ${classes.map(c => `<option value="${c.id}" ${state.filters.assignmentClass === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+        </select>
+
+        <select class="form-control" id="asg-filter-status" style="width:auto; min-width:130px; padding:0.375rem 0.625rem; font-size:0.8125rem;">
+          <option value="all" ${state.filters.assignmentStatus === 'all' ? 'selected' : ''}>All Status</option>
+          <option value="pending" ${state.filters.assignmentStatus === 'pending' ? 'selected' : ''}>Active / Pending</option>
+          <option value="completed" ${state.filters.assignmentStatus === 'completed' ? 'selected' : ''}>Completed</option>
+          <option value="overdue" ${state.filters.assignmentStatus === 'overdue' ? 'selected' : ''}>Overdue</option>
+        </select>
+
+        <select class="form-control" id="asg-filter-type" style="width:auto; min-width:130px; padding:0.375rem 0.625rem; font-size:0.8125rem;">
+          <option value="all">All Types</option>
+          <option value="homework" ${state.filters.assignmentType === 'homework' ? 'selected' : ''}>Homework</option>
+          <option value="essay" ${state.filters.assignmentType === 'essay' ? 'selected' : ''}>Essay</option>
+          <option value="project" ${state.filters.assignmentType === 'project' ? 'selected' : ''}>Project</option>
+          <option value="lab" ${state.filters.assignmentType === 'lab' ? 'selected' : ''}>Lab Report</option>
+          <option value="quiz" ${state.filters.assignmentType === 'quiz' ? 'selected' : ''}>Quiz</option>
+          <option value="reading" ${state.filters.assignmentType === 'reading' ? 'selected' : ''}>Reading</option>
+        </select>
+
+        <select class="form-control" id="asg-filter-priority" style="width:auto; min-width:120px; padding:0.375rem 0.625rem; font-size:0.8125rem;">
+          <option value="all">All Priority</option>
+          <option value="high" ${state.filters.assignmentPriority === 'high' ? 'selected' : ''}>High Priority</option>
+          <option value="medium" ${state.filters.assignmentPriority === 'medium' ? 'selected' : ''}>Medium Priority</option>
+          <option value="low" ${state.filters.assignmentPriority === 'low' ? 'selected' : ''}>Low Priority</option>
+        </select>
+      </div>
+
+      <!-- View Container -->
+      ${isKanban ? `
+        <div class="kanban-board">
+          <div class="kanban-column">
+            <div class="kanban-col-header">
+              <span class="kanban-col-title">To Do</span>
+              <span class="kanban-col-count">${allAssignments.filter(a => a.status === 'not-started').length}</span>
+            </div>
+            <div class="kanban-cards-list">
+              ${allAssignments.filter(a => a.status === 'not-started').map(a => renderTaskItemHTML(a)).join('') || '<div style="color:var(--text-muted); font-size:0.75rem; text-align:center; padding:1rem;">Empty</div>'}
+            </div>
+          </div>
+
+          <div class="kanban-column">
+            <div class="kanban-col-header">
+              <span class="kanban-col-title">In Progress</span>
+              <span class="kanban-col-count">${allAssignments.filter(a => a.status === 'in-progress').length}</span>
+            </div>
+            <div class="kanban-cards-list">
+              ${allAssignments.filter(a => a.status === 'in-progress').map(a => renderTaskItemHTML(a)).join('') || '<div style="color:var(--text-muted); font-size:0.75rem; text-align:center; padding:1rem;">Empty</div>'}
+            </div>
+          </div>
+
+          <div class="kanban-column">
+            <div class="kanban-col-header">
+              <span class="kanban-col-title">Completed</span>
+              <span class="kanban-col-count">${allAssignments.filter(a => a.status === 'completed').length}</span>
+            </div>
+            <div class="kanban-cards-list">
+              ${allAssignments.filter(a => a.status === 'completed').map(a => renderTaskItemHTML(a)).join('') || '<div style="color:var(--text-muted); font-size:0.75rem; text-align:center; padding:1rem;">Empty</div>'}
+            </div>
+          </div>
+        </div>
+      ` : `
+        <div class="card-panel">
+          ${allAssignments.length > 0 ? allAssignments.map(task => renderTaskItemHTML(task)).join('') : `
+            <div class="empty-state-box">
+              <div class="empty-state-icon">📋</div>
+              <div class="empty-state-title">No assignments found</div>
+              <p class="empty-state-desc">Create your first homework or project assignment to start tracking deadlines.</p>
+              <button class="btn-primary" id="btn-empty-asg-create">+ Add Assignment</button>
+            </div>
+          `}
+        </div>
+      `}
+    `;
+
+    container.querySelector('#btn-create-assignment')?.addEventListener('click', () => openAssignmentModal());
+    container.querySelector('#btn-empty-asg-create')?.addEventListener('click', () => openAssignmentModal());
+
+    container.querySelector('#btn-view-list')?.addEventListener('click', () => {
+      state.assignmentViewMode = 'list';
+      renderAssignmentsView();
+    });
+    container.querySelector('#btn-view-kanban')?.addEventListener('click', () => {
+      state.assignmentViewMode = 'kanban';
+      renderAssignmentsView();
+    });
+
+    container.querySelector('#asg-filter-class')?.addEventListener('change', (e) => {
+      state.filters.assignmentClass = e.target.value;
+      renderAssignmentsView();
+    });
+    container.querySelector('#asg-filter-status')?.addEventListener('change', (e) => {
+      state.filters.assignmentStatus = e.target.value;
+      renderAssignmentsView();
+    });
+    container.querySelector('#asg-filter-type')?.addEventListener('change', (e) => {
+      state.filters.assignmentType = e.target.value;
+      renderAssignmentsView();
+    });
+    container.querySelector('#asg-filter-priority')?.addEventListener('change', (e) => {
+      state.filters.assignmentPriority = e.target.value;
+      renderAssignmentsView();
+    });
+
+    bindTaskItemEvents(container);
+  }
+
+  // --- VIEW: EXAMS ---
+  function renderExamsView() {
+    const container = document.getElementById('view-exams');
+    if (!container) return;
+
+    const exams = store.getExams();
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const upcomingExams = exams.filter(e => e.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date));
+    const pastExams = exams.filter(e => e.date < todayStr).sort((a, b) => b.date.localeCompare(a.date));
+
+    container.innerHTML = `
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Exams & Test Schedules</h1>
+          <p class="section-subtitle">Countdown timers, seat assignments, study topics, and test scores.</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn-primary" id="btn-create-exam">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>+ Schedule Exam</span>
+          </button>
         </div>
       </div>
 
-      <div class="exams-list-grid">
-        ${exams.length > 0 ? exams.map(e => {
-          const cls = store.getClassById(e.classId);
-          const daysLeft = getDaysDiff(new Date(), new Date(e.date));
-          const isPast = daysLeft < 0 || e.status === 'completed';
-
-          return `
-            <div class="exam-card" style="border-left-color: ${cls ? cls.color : 'var(--accent)'};" data-exam-id="${e.id}">
-              <div class="exam-header">
-                <div>
-                  ${cls ? `<span class="class-tag" style="background:${cls.color}20; color:${cls.color}; margin-bottom:0.375rem;">${cls.name}</span>` : ''}
-                  <div class="exam-title">${e.title}</div>
-                </div>
-                <div>
-                  <span class="countdown-badge" style="${isPast ? 'background:var(--border-strong); color:var(--text-secondary);' : ''}">
-                    ${isPast ? 'Completed' : daysLeft === 0 ? 'Today!' : daysLeft === 1 ? 'Tomorrow' : `In ${daysLeft} Days`}
-                  </span>
-                </div>
-              </div>
-
-              ${e.description ? `<p style="font-size:0.8125rem; color:var(--text-secondary); margin-top:0.75rem;">${e.description}</p>` : ''}
-
-              ${e.topics && e.topics.length > 0 ? `
-                <div style="margin-top:0.875rem;">
-                  <span class="info-label">Study Topics</span>
-                  <div style="display:flex; flex-wrap:wrap; gap:0.375rem; margin-top:0.375rem;">
-                    ${e.topics.map(t => `<span class="badge neutral" style="font-size:0.6875rem;">${t}</span>`).join('')}
-                  </div>
-                </div>
-              ` : ''}
-
-              <div class="exam-grid-info">
-                <div class="exam-info-block">
-                  <span class="info-label">Date & Time</span>
-                  <span class="info-value">${formatDate(e.date)} • ${e.startTime}</span>
-                </div>
-                <div class="exam-info-block">
-                  <span class="info-label">Duration</span>
-                  <span class="info-value">${e.duration} Minutes</span>
-                </div>
-                <div class="exam-info-block">
-                  <span class="info-label">Location / Room</span>
-                  <span class="info-value">${e.room || (cls ? cls.room : 'TBD')}</span>
-                </div>
-                <div class="exam-info-block">
-                  <span class="info-label">Seat Assigned</span>
-                  <span class="info-value">${e.seatNumber || 'Free Seating'}</span>
-                </div>
-                ${e.scoreEarned !== null ? `
-                  <div class="exam-info-block">
-                    <span class="info-label">Score Earned</span>
-                    <span class="info-value" style="color:var(--success); font-weight:700;">${e.scoreEarned} / ${e.maxScore || 100}</span>
-                  </div>
-                ` : ''}
-              </div>
-
-              <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border-subtle);">
-                <button class="btn-secondary btn-edit-exam" style="padding:0.375rem 0.75rem; font-size:0.75rem;">Edit Exam</button>
-                <button class="btn-secondary btn-delete-exam" style="padding:0.375rem 0.75rem; font-size:0.75rem; color:var(--danger);">Delete</button>
-              </div>
+      <div style="margin-bottom:1.5rem;">
+        <h2 style="font-size:1rem; font-weight:700; color:var(--text-primary); margin-bottom:0.75rem;">Upcoming Exams (${upcomingExams.length})</h2>
+        <div class="exam-cards-grid">
+          ${upcomingExams.length > 0 ? upcomingExams.map(e => renderExamCardHTML(e)).join('') : `
+            <div class="empty-state-box" style="grid-column: 1 / -1;">
+              <div class="empty-state-icon">📝</div>
+              <div class="empty-state-title">No upcoming exams</div>
+              <p class="empty-state-desc">Schedule your midterm, final, or unit test dates to start preparing.</p>
+              <button class="btn-primary" id="btn-empty-exam-create">+ Schedule Exam</button>
             </div>
-          `;
-        }).join('') : `
-          <div class="card-panel" style="text-align:center; padding:3.5rem; color:var(--text-muted);">
-            <p style="font-size:1.125rem; font-weight:600;">No exams found in this tab</p>
-            <p style="font-size:0.875rem; margin-top:0.25rem;">Schedule an exam or view another filter.</p>
-          </div>
-        `}
+          `}
+        </div>
       </div>
+
+      ${pastExams.length > 0 ? `
+        <div>
+          <h2 style="font-size:1rem; font-weight:700; color:var(--text-primary); margin-bottom:0.75rem;">Past & Graded Exams (${pastExams.length})</h2>
+          <div class="exam-cards-grid">
+            ${pastExams.map(e => renderExamCardHTML(e, true)).join('')}
+          </div>
+        </div>
+      ` : ''}
     `;
 
-    container.querySelectorAll('[data-exam-tab]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        state.filters.examStatus = btn.getAttribute('data-exam-tab');
-        renderExamsView();
+    container.querySelector('#btn-create-exam')?.addEventListener('click', () => openExamModal());
+    container.querySelector('#btn-empty-exam-create')?.addEventListener('click', () => openExamModal());
+
+    bindExamCardEvents(container);
+  }
+
+  function renderExamCardHTML(exam, isPast = false) {
+    const cls = store.getClassById(exam.classId);
+    const days = getDaysUntil(exam.date);
+
+    return `
+      <div class="exam-card" style="--exam-color: ${cls ? cls.color : 'var(--accent)'};" data-exam-id="${exam.id}">
+        <div class="exam-header">
+          <div>
+            ${cls ? `<span class="badge" style="background:${cls.color}20; color:${cls.color}; margin-bottom:0.375rem;">${cls.name}</span>` : ''}
+            <div class="exam-title">${exam.title}</div>
+          </div>
+          <span class="exam-countdown-pill ${isPast ? 'future' : (days <= 2 ? 'urgent' : (days <= 7 ? 'soon' : 'future'))}">
+            ${isPast ? 'Completed' : (days === 0 ? 'Today' : (days === 1 ? 'Tomorrow' : `${days} days left`))}
+          </span>
+        </div>
+
+        <div class="exam-details-grid">
+          <div class="exam-detail-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            ${new Date(exam.date).toLocaleDateString([], { month: 'short', day: 'numeric', weekday: 'short' })}
+          </div>
+          <div class="exam-detail-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            ${exam.startTime} (${exam.duration || 60}m)
+          </div>
+          ${exam.room ? `
+            <div class="exam-detail-item">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              ${exam.room} ${exam.seatNumber ? `· ${exam.seatNumber}` : ''}
+            </div>
+          ` : ''}
+          ${exam.scoreEarned !== null ? `
+            <div class="exam-detail-item" style="color:var(--success-text); font-weight:700;">
+              Score: ${exam.scoreEarned}/${exam.maxScore || 100} (${Math.round((exam.scoreEarned / (exam.maxScore || 100)) * 100)}%)
+            </div>
+          ` : ''}
+        </div>
+
+        ${Array.isArray(exam.topics) && exam.topics.length > 0 ? `
+          <div style="margin-top:0.5rem; font-size:0.75rem; border-top:1px solid var(--border-subtle); padding-top:0.5rem;">
+            <div style="font-weight:700; color:var(--text-muted); margin-bottom:0.25rem; font-size:0.6875rem; text-transform:uppercase;">Study Topics:</div>
+            <div style="display:flex; flex-wrap:wrap; gap:0.25rem;">
+              ${exam.topics.map(t => `<span class="badge neutral" style="font-size:0.6875rem;">${t}</span>`).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <div style="display:flex; justify-content:flex-end; gap:0.375rem; margin-top:0.875rem; border-top:1px solid var(--border-subtle); padding-top:0.625rem;">
+          <button class="btn-ghost" data-action="edit-exam" style="font-size:0.75rem;">Edit</button>
+          <button class="btn-ghost" data-action="delete-exam" style="font-size:0.75rem; color:var(--danger);">Delete</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindExamCardEvents(parent) {
+    parent.querySelectorAll('[data-action="edit-exam"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const examId = e.target.closest('.exam-card').getAttribute('data-exam-id');
+        const exam = store.getExams().find(ex => ex.id === examId);
+        if (exam) openExamModal(exam);
       });
     });
 
-    const btnAdd = container.querySelector('#btn-add-exam');
-    if (btnAdd) btnAdd.addEventListener('click', () => openExamModal());
-
-    container.querySelectorAll('.exam-card').forEach(card => {
-      const id = card.getAttribute('data-exam-id');
-      
-      const btnEdit = card.querySelector('.btn-edit-exam');
-      if (btnEdit) {
-        btnEdit.addEventListener('click', () => {
-          const exam = store.getState().exams.find(e => e.id === id);
-          if (exam) openExamModal(exam);
-        });
-      }
-
-      const btnDelete = card.querySelector('.btn-delete-exam');
-      if (btnDelete) {
-        btnDelete.addEventListener('click', () => {
-          if (confirm('Delete this exam from your planner?')) {
-            store.deleteExam(id);
-            showToast('Exam deleted', 'info');
-          }
-        });
-      }
+    parent.querySelectorAll('[data-action="delete-exam"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const examId = e.target.closest('.exam-card').getAttribute('data-exam-id');
+        if (confirm('Delete this exam?')) {
+          store.deleteExam(examId);
+          showToast('Exam deleted', 'info');
+        }
+      });
     });
   }
 
-  // --- CALENDAR VIEW ---
+  // --- VIEW: CALENDAR ---
   function renderCalendarView() {
     const container = document.getElementById('view-calendar');
     if (!container) return;
 
-    const currentYear = state.calendarDate.getFullYear();
-    const currentMonth = state.calendarDate.getMonth();
+    const curDate = state.calendarDate;
+    const year = curDate.getFullYear();
+    const month = curDate.getMonth();
+
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
 
     const assignments = store.getAssignments();
     const exams = store.getExams();
 
-    const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const daysInPrevMonth = new Date(currentYear, currentMonth, 0).getDate();
+    let calendarCellsHTML = '';
 
-    const totalCells = Math.ceil((firstDayIndex + daysInMonth) / 7) * 7;
+    // Prev month padding
+    for (let i = firstDay - 1; i >= 0; i--) {
+      calendarCellsHTML += `
+        <div class="calendar-day-cell other-month">
+          <span class="calendar-day-number">${daysInPrevMonth - i}</span>
+        </div>
+      `;
+    }
+
+    // Current month days
     const today = new Date();
+    const isThisMonth = today.getFullYear() === year && today.getMonth() === month;
 
-    let cellsHTML = '';
-
-    for (let i = 0; i < totalCells; i++) {
-      let dayNum;
-      let isCurrentMonth = true;
-      let cellDate;
-
-      if (i < firstDayIndex) {
-        dayNum = daysInPrevMonth - firstDayIndex + i + 1;
-        isCurrentMonth = false;
-        cellDate = new Date(currentYear, currentMonth - 1, dayNum);
-      } else if (i >= firstDayIndex + daysInMonth) {
-        dayNum = i - (firstDayIndex + daysInMonth) + 1;
-        isCurrentMonth = false;
-        cellDate = new Date(currentYear, currentMonth + 1, dayNum);
-      } else {
-        dayNum = i - firstDayIndex + 1;
-        cellDate = new Date(currentYear, currentMonth, dayNum);
-      }
-
-      const isToday = isSameDay(cellDate, today);
-      const dateStr = cellDate.toISOString().split('T')[0];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const isToday = isThisMonth && today.getDate() === day;
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
       const dayAsgs = assignments.filter(a => a.dueDate && a.dueDate.startsWith(dateStr));
       const dayExams = exams.filter(e => e.date === dateStr);
 
-      cellsHTML += `
-        <div class="calendar-day-cell ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''}" data-cal-date="${dateStr}">
-          <div class="day-number">${dayNum}</div>
-          
-          <div class="calendar-events-list">
-            ${dayExams.map(e => `
-              <div class="cal-event-pill" style="background:#ef4444; color:white;" title="Exam: ${e.title}" data-view-exam-id="${e.id}">
-                <span>📝 ${e.title}</span>
-              </div>
-            `).join('')}
-
+      calendarCellsHTML += `
+        <div class="calendar-day-cell ${isToday ? 'today' : ''}" data-date="${dateStr}">
+          <span class="calendar-day-number">${day}</span>
+          <div style="display:flex; flex-direction:column; gap:2px; margin-top:2px; overflow:hidden;">
+            ${dayExams.map(e => `<span class="cal-event-pill" style="background:#ef4444;">📝 ${e.title}</span>`).join('')}
             ${dayAsgs.map(a => {
               const cls = store.getClassById(a.classId);
-              const color = cls ? cls.color : 'var(--accent)';
-              return `
-                <div class="cal-event-pill" style="background:${color}20; color:${color}; border-left:3px solid ${color};" title="Due: ${a.title}" data-view-task-id="${a.id}">
-                  <span>${a.title}</span>
-                </div>
-              `;
+              return `<span class="cal-event-pill" style="background:${cls ? cls.color : 'var(--accent)'};">${a.title}</span>`;
             }).join('')}
           </div>
+        </div>
+      `;
+    }
+
+    // Fill remaining grid slots
+    const totalRendered = firstDay + daysInMonth;
+    const nextPadding = totalRendered <= 35 ? (35 - totalRendered) : (42 - totalRendered);
+    for (let i = 1; i <= nextPadding; i++) {
+      calendarCellsHTML += `
+        <div class="calendar-day-cell other-month">
+          <span class="calendar-day-number">${i}</span>
         </div>
       `;
     }
@@ -2236,318 +1964,275 @@
     container.innerHTML = `
       <div class="section-header">
         <div>
-          <h1 class="section-title">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            Academic Calendar
-          </h1>
-          <p class="section-subtitle">Visual overview of assignments, exams, and milestones.</p>
+          <h1 class="section-title">Academic Calendar</h1>
+          <p class="section-subtitle">Visual overview of deadlines, exam sessions, and schedule.</p>
         </div>
         <div class="header-actions">
-          <button class="btn-secondary" id="btn-cal-today">Today</button>
-          <button class="btn-primary" id="btn-cal-add">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Add to Calendar
-          </button>
+          <button class="btn-secondary" id="cal-btn-prev">‹ Prev</button>
+          <button class="btn-secondary" id="cal-btn-today">Today</button>
+          <button class="btn-secondary" id="cal-btn-next">Next ›</button>
+          <button class="btn-primary" id="cal-btn-add">+ Add Task</button>
         </div>
       </div>
 
       <div class="calendar-container">
         <div class="calendar-header">
-          <div class="calendar-month-title">${monthNames[currentMonth]} ${currentYear}</div>
-          <div class="calendar-nav-buttons">
-            <button class="icon-btn" id="btn-cal-prev" title="Previous Month">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            </button>
-            <button class="icon-btn" id="btn-cal-next" title="Next Month">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </button>
-          </div>
+          <h2 style="font-size:1.125rem; font-weight:700; color:var(--text-primary);">
+            ${monthNames[month]} ${year}
+          </h2>
         </div>
 
-        <div class="calendar-grid-days-header">
-          <div>Sun</div>
-          <div>Mon</div>
-          <div>Tue</div>
-          <div>Wed</div>
-          <div>Thu</div>
-          <div>Fri</div>
-          <div>Sat</div>
+        <div class="calendar-grid-header">
+          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
         </div>
 
-        <div class="calendar-grid-month">
-          ${cellsHTML}
+        <div class="calendar-days-matrix">
+          ${calendarCellsHTML}
         </div>
       </div>
     `;
 
-    container.querySelector('#btn-cal-prev').addEventListener('click', () => {
+    container.querySelector('#cal-btn-prev')?.addEventListener('click', () => {
       state.calendarDate.setMonth(state.calendarDate.getMonth() - 1);
       renderCalendarView();
     });
-
-    container.querySelector('#btn-cal-next').addEventListener('click', () => {
+    container.querySelector('#cal-btn-next')?.addEventListener('click', () => {
       state.calendarDate.setMonth(state.calendarDate.getMonth() + 1);
       renderCalendarView();
     });
-
-    container.querySelector('#btn-cal-today').addEventListener('click', () => {
+    container.querySelector('#cal-btn-today')?.addEventListener('click', () => {
       state.calendarDate = new Date();
       renderCalendarView();
     });
+    container.querySelector('#cal-btn-add')?.addEventListener('click', () => openAssignmentModal());
 
-    container.querySelector('#btn-cal-add').addEventListener('click', () => {
-      openQuickAddModal();
-    });
-
-    container.querySelectorAll('.calendar-day-cell').forEach(cell => {
-      cell.addEventListener('click', (e) => {
-        if (e.target.closest('.cal-event-pill')) return;
-        const date = cell.getAttribute('data-cal-date');
-        openAssignmentModal({ dueDate: `${date}T23:59:00` });
-      });
-    });
-
-    container.querySelectorAll('[data-view-task-id]').forEach(pill => {
-      pill.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = pill.getAttribute('data-view-task-id');
-        const asg = store.getState().assignments.find(a => a.id === id);
-        if (asg) openAssignmentModal(asg);
-      });
-    });
-
-    container.querySelectorAll('[data-view-exam-id]').forEach(pill => {
-      pill.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = pill.getAttribute('data-view-exam-id');
-        const exam = store.getState().exams.find(e => e.id === id);
-        if (exam) openExamModal(exam);
+    container.querySelectorAll('.calendar-day-cell:not(.other-month)').forEach(cell => {
+      cell.addEventListener('click', () => {
+        const dateStr = cell.getAttribute('data-date');
+        openAssignmentModal({ dueDate: `${dateStr}T23:59:00` });
       });
     });
   }
 
-  // --- SCHEDULE TIMETABLE VIEW ---
+  // --- VIEW: SCHEDULE / TIMETABLE ---
   function renderScheduleView() {
     const container = document.getElementById('view-schedule');
     if (!container) return;
 
-    const scheduleSlots = store.getSchedule();
-    const timeHours = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
+    const classes = store.getClasses();
+    const schedule = store.getSchedule();
+
     const days = [
-      { num: 1, name: 'Monday' },
-      { num: 2, name: 'Tuesday' },
-      { num: 3, name: 'Wednesday' },
-      { num: 4, name: 'Thursday' },
-      { num: 5, name: 'Friday' }
+      { id: 1, name: 'Mon' },
+      { id: 2, name: 'Tue' },
+      { id: 3, name: 'Wed' },
+      { id: 4, name: 'Thu' },
+      { id: 5, name: 'Fri' }
     ];
 
-    let gridRowsHTML = '';
-
-    timeHours.forEach(hour => {
-      gridRowsHTML += `<div class="time-slot-label">${hour}</div>`;
-
-      days.forEach(d => {
-        const currentHourNum = parseInt(hour.split(':')[0], 10);
-        const matchingSlot = scheduleSlots.find(s => {
-          if (s.dayOfWeek !== d.num) return false;
-          const slotHour = parseInt(s.startTime.split(':')[0], 10);
-          return slotHour === currentHourNum;
-        });
-
-        if (matchingSlot) {
-          const cls = store.getClassById(matchingSlot.classId);
-          gridRowsHTML += `
-            <div class="timetable-slot-cell" style="background: ${cls ? cls.color : 'var(--accent)'}15;">
-              <div class="class-block-card" style="background: ${cls ? cls.color : 'var(--accent)'};" data-slot-id="${matchingSlot.id}">
-                <div class="class-block-title">${cls ? cls.name : 'Class'}</div>
-                <div class="class-block-meta">${matchingSlot.startTime} - ${matchingSlot.endTime} • Room ${matchingSlot.room || (cls ? cls.room : '')}</div>
-              </div>
-            </div>
-          `;
-        } else {
-          gridRowsHTML += `<div class="timetable-slot-cell" data-add-slot-day="${d.num}" data-add-slot-time="${hour}"></div>`;
-        }
-      });
-    });
+    const timeSlots = [
+      '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'
+    ];
 
     container.innerHTML = `
       <div class="section-header">
         <div>
-          <h1 class="section-title">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            Weekly Timetable & Schedule
-          </h1>
-          <p class="section-subtitle">Weekly period grid with room numbers and class times.</p>
+          <h1 class="section-title">Weekly Timetable</h1>
+          <p class="section-subtitle">Weekly recurring class schedule and lecture times.</p>
         </div>
         <div class="header-actions">
           <button class="btn-primary" id="btn-add-schedule-slot">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Add Class Period
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>+ Add Class Slot</span>
           </button>
         </div>
       </div>
 
-      <div class="timetable-wrapper">
-        <div class="timetable-grid">
-          <div class="time-column-header">Time</div>
-          <div class="day-column-header">Mon</div>
-          <div class="day-column-header">Tue</div>
-          <div class="day-column-header">Wed</div>
-          <div class="day-column-header">Thu</div>
-          <div class="day-column-header">Fri</div>
-
-          ${gridRowsHTML}
+      ${classes.length === 0 ? `
+        <div class="empty-state-box">
+          <div class="empty-state-icon">🕒</div>
+          <div class="empty-state-title">No timetable slots configured</div>
+          <p class="empty-state-desc">First create your courses, then add meeting times to view your weekly matrix.</p>
+          <button class="btn-primary" id="btn-empty-sched-class">+ Add Course First</button>
         </div>
-      </div>
+      ` : `
+        <div class="timetable-grid">
+          <div class="timetable-header-cell">Time</div>
+          ${days.map(d => `<div class="timetable-header-cell">${d.name}</div>`).join('')}
+
+          ${timeSlots.map(time => `
+            <div class="timetable-time-slot">${time}</div>
+            ${days.map(d => {
+              const slot = schedule.find(s => s.dayOfWeek === d.id && s.startTime.startsWith(time.slice(0, 2)));
+              if (slot) {
+                const cls = store.getClassById(slot.classId);
+                return `
+                  <div class="timetable-cell">
+                    <div class="timetable-class-block" style="background:${cls ? cls.color : 'var(--accent)'};" title="Click to delete slot" data-slot-id="${slot.id}">
+                      <div>${cls ? cls.name : 'Class'}</div>
+                      <div style="font-size:0.625rem; opacity:0.9;">${slot.room ? `Room ${slot.room}` : ''}</div>
+                    </div>
+                  </div>
+                `;
+              }
+              return `<div class="timetable-cell"></div>`;
+            }).join('')}
+          `).join('')}
+        </div>
+      `}
     `;
 
-    container.querySelector('#btn-add-schedule-slot').addEventListener('click', () => openScheduleSlotModal());
+    container.querySelector('#btn-add-schedule-slot')?.addEventListener('click', () => openScheduleModal());
+    container.querySelector('#btn-empty-sched-class')?.addEventListener('click', () => openClassModal());
 
-    container.querySelectorAll('.class-block-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const id = card.getAttribute('data-slot-id');
-        if (confirm('Remove this class period from your weekly timetable?')) {
-          store.deleteScheduleSlot(id);
+    container.querySelectorAll('.timetable-class-block').forEach(block => {
+      block.addEventListener('click', () => {
+        const slotId = block.getAttribute('data-slot-id');
+        if (confirm('Delete this timetable time slot?')) {
+          store.deleteScheduleSlot(slotId);
           showToast('Schedule slot removed', 'info');
         }
       });
     });
   }
 
-  // --- GRADES VIEW ---
+  // --- VIEW: GRADES & SIMULATOR ---
   function renderGradesView() {
     const container = document.getElementById('view-grades');
     if (!container) return;
 
     const classes = store.getClasses();
+    const gpaData = store.calculateOverallGPA();
 
     container.innerHTML = `
       <div class="section-header">
         <div>
-          <h1 class="section-title">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-            Gradebook & "What-If" Simulator
-          </h1>
-          <p class="section-subtitle">Weighted category averages, cumulative GPA tracking, and target score predictions.</p>
+          <h1 class="section-title">Grades & What-If Simulator</h1>
+          <p class="section-subtitle">Calculate weighted course grades, simulate final exam scores, and track GPA.</p>
         </div>
       </div>
 
-      <div class="grades-container">
-        <div class="grades-classes-col">
-          ${classes.map(c => {
-            const g = store.calculateClassGrade(c.id);
-            return `
-              <div class="grade-class-card" style="border-top: 4px solid ${c.color};">
-                <div class="grade-card-header">
-                  <div>
-                    <h3 style="margin:0; font-size:1.125rem; font-weight:700;">${c.name} (${c.code})</h3>
-                    <p style="font-size:0.8125rem; color:var(--text-secondary); margin-top:0.25rem;">
-                      ${c.credits} Credits • Instructor: ${c.teacher}
-                    </p>
-                  </div>
-                  <div style="text-align:right;">
-                    <div class="grade-score-display" style="color:${c.color};">
-                      ${g.score !== null ? `${g.score}%` : 'N/A'}
-                    </div>
-                    <span class="badge ${g.letter === 'A' || g.letter === 'A-' ? 'success' : g.letter === 'F' ? 'danger' : 'primary'}">
-                      Letter: ${g.letter} (${g.gpaPoints ? g.gpaPoints.toFixed(1) : '0.0'})
-                    </span>
-                  </div>
-                </div>
-
-                <table class="grade-categories-table">
-                  <thead>
-                    <tr>
-                      <th>Category</th>
-                      <th>Weight</th>
-                      <th>Graded Items</th>
-                      <th>Category Avg</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${g.categories.map(cat => `
-                      <tr>
-                        <td style="font-weight:600;">${cat.name}</td>
-                        <td>${cat.weight}%</td>
-                        <td>${cat.itemCount} items (${cat.earned}/${cat.possible})</td>
-                        <td style="font-weight:700;">${cat.percentage !== null ? `${Math.round(cat.percentage * 10) / 10}%` : '—'}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
-            `;
-          }).join('')}
-        </div>
-
-        <div class="grades-simulator-col">
-          <div class="what-if-panel">
-            <h3 style="margin:0 0 0.5rem 0; font-size:1.125rem; font-weight:700; display:flex; align-items:center; gap:0.5rem;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-              "What-If" Grade Simulator
-            </h3>
-            <p style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:1.25rem;">
-              Calculate the exact score needed on your next exam or final to achieve your target class grade.
-            </p>
-
-            <div class="form-group">
-              <label class="form-label">Select Course</label>
-              <select class="form-control" id="what-if-class-select">
-                ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
-              </select>
+      <!-- GPA Hero Card -->
+      <div class="card-panel" style="background:linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface-subtle) 100%); border-left: 5px solid var(--accent); margin-bottom:1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+          <div>
+            <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Term Cumulative GPA</div>
+            <div style="font-size:2.25rem; font-weight:800; color:var(--text-primary); letter-spacing:-0.03em; margin:0.25rem 0;">
+              ${gpaData.gpa !== null ? gpaData.gpa.toFixed(2) : '—'} <span style="font-size:1rem; color:var(--text-muted); font-weight:500;">/ 4.00</span>
             </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Desired Grade (%)</label>
-                <input type="number" class="form-control" id="what-if-target-score" value="90" min="50" max="100" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Upcoming Exam Weight (%)</label>
-                <input type="number" class="form-control" id="what-if-weight" value="25" min="5" max="100" />
+            <div style="font-size:0.8125rem; color:var(--text-secondary);">
+              Based on ${gpaData.gradedCount} graded course${gpaData.gradedCount === 1 ? '' : 's'} (${gpaData.totalCredits} total credits)
+            </div>
+          </div>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <div style="text-align:right;">
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">Overall Standing</div>
+              <div style="font-size:1.25rem; font-weight:800; color:var(--accent);">
+                ${gpaData.gpa !== null ? store.percentageToLetter((gpaData.gpa / 4) * 100) : 'N/A'}
               </div>
             </div>
-
-            <button class="btn-primary" id="btn-calculate-what-if" style="width:100%; justify-content:center; margin-top:0.5rem;">
-              Calculate Required Score
-            </button>
-
-            <div id="what-if-result-container" class="what-if-formula-box" style="display:none;"></div>
           </div>
         </div>
+      </div>
+
+      <!-- Course Breakdown Grid -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+        ${classes.map(c => {
+          const grade = store.calculateClassGrade(c.id);
+          return `
+            <div class="card-panel" style="margin-bottom:0; display:flex; flex-direction:column;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.75rem;">
+                <div>
+                  <span class="badge" style="background:${c.color}20; color:${c.color}; margin-bottom:0.25rem;">${c.code || 'Course'}</span>
+                  <div style="font-weight:700; font-size:1rem; color:var(--text-primary);">${c.name}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:1.25rem; font-weight:800; color:var(--text-primary);">${grade.score !== null ? `${grade.score}%` : '—'}</div>
+                  <span class="badge ${grade.score >= 90 ? 'success' : (grade.score >= 80 ? 'primary' : 'neutral')}">${grade.letter}</span>
+                </div>
+              </div>
+
+              <!-- Categories Breakdown -->
+              <div style="display:flex; flex-direction:column; gap:0.375rem; margin-top:auto; font-size:0.75rem;">
+                ${grade.categories.map(cat => `
+                  <div>
+                    <div style="display:flex; justify-content:space-between; color:var(--text-secondary); margin-bottom:2px;">
+                      <span>${cat.name} (${cat.weight}%)</span>
+                      <span style="font-weight:700;">${cat.percentage !== null ? `${Math.round(cat.percentage)}%` : 'No scores'}</span>
+                    </div>
+                    <div style="height:5px; background:var(--bg-surface-hover); border-radius:var(--radius-full); overflow:hidden;">
+                      <div style="width:${cat.percentage !== null ? Math.min(100, cat.percentage) : 0}%; height:100%; background:${c.color};"></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }).join('') || '<div class="empty-state-box" style="grid-column:1/-1;"><div class="empty-state-title">No classes enrolled</div><p class="empty-state-desc">Add courses in Classes Directory to calculate grades.</p></div>'}
+      </div>
+
+      <!-- What-If Simulator Panel -->
+      <div class="card-panel">
+        <h3 class="panel-title" style="margin-bottom:0.5rem;">🎯 "What-If" Final Grade Simulator</h3>
+        <p style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:1rem;">
+          Calculate the exact score needed on your next exam or final to achieve your target letter grade.
+        </p>
+
+        <div class="form-row" style="margin-bottom:1rem;">
+          <div class="form-group">
+            <label class="form-label">Select Course</label>
+            <select class="form-control" id="sim-class-select">
+              ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Desired Target Grade (%)</label>
+            <input type="number" class="form-control" id="sim-target-score" value="90" min="50" max="100" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Upcoming Exam Weight (%)</label>
+            <input type="number" class="form-control" id="sim-weight-score" value="25" min="5" max="100" />
+          </div>
+        </div>
+
+        <button class="btn-primary" id="btn-calculate-whatif">Calculate Required Score</button>
+
+        <div id="sim-result-container" style="margin-top:1rem; display:none; padding:1rem; background:var(--bg-surface-subtle); border-radius:var(--radius-md); border:1px solid var(--border-default);"></div>
       </div>
     `;
 
-    const btnCalc = container.querySelector('#btn-calculate-what-if');
-    if (btnCalc) {
-      btnCalc.addEventListener('click', () => {
-        const clsId = container.querySelector('#what-if-class-select').value;
-        const target = Number(container.querySelector('#what-if-target-score').value);
-        const weight = Number(container.querySelector('#what-if-weight').value);
+    container.querySelector('#btn-calculate-whatif')?.addEventListener('click', () => {
+      const classId = container.querySelector('#sim-class-select').value;
+      const target = Number(container.querySelector('#sim-target-score').value) || 90;
+      const weight = Number(container.querySelector('#sim-weight-score').value) || 25;
 
-        const sim = store.simulateWhatIfGrade(clsId, target, weight);
-        const resBox = container.querySelector('#what-if-result-container');
-        resBox.style.display = 'block';
+      const result = store.simulateWhatIfGrade(classId, target, weight);
+      const resBox = container.querySelector('#sim-result-container');
+      if (!resBox) return;
 
-        resBox.innerHTML = `
-          <div style="font-size:0.8125rem; color:var(--text-secondary);">
-            Current Grade: <b>${sim.currentScore ? `${sim.currentScore}%` : 'No scores logged yet'}</b>
-          </div>
-          <div style="font-size:1.25rem; font-weight:800; margin:0.5rem 0; color:${sim.isFeasible ? 'var(--accent)' : 'var(--danger)'};">
-            Need: ${sim.requiredScore}%
-          </div>
-          <div style="font-size:0.75rem; color:${sim.isFeasible ? 'var(--success)' : 'var(--danger)'}; font-weight:600;">
-            ${sim.isFeasible 
-              ? `✓ Achievable! Scoring ${sim.requiredScore}% on this ${sim.weightUsed}% weight item will secure your target ${sim.targetScore}%.`
-              : `⚠️ Tough target! You would need an extra-credit score of ${sim.requiredScore}% to hit ${sim.targetScore}%.`
-            }
-          </div>
-        `;
-      });
-    }
+      resBox.style.display = 'block';
+      const isDoable = result.requiredScore <= 100 && result.requiredScore >= 0;
+
+      resBox.innerHTML = `
+        <div style="font-weight:700; font-size:0.9375rem; color:var(--text-primary); margin-bottom:0.25rem;">
+          Simulation Result
+        </div>
+        <div style="font-size:0.875rem; color:var(--text-secondary);">
+          To finish with a <b style="color:var(--accent);">${target}% (${store.percentageToLetter(target)})</b>, you need to score at least:
+        </div>
+        <div style="font-size:2rem; font-weight:800; color:${isDoable ? 'var(--success)' : 'var(--danger)'}; margin:0.5rem 0;">
+          ${result.requiredScore}%
+        </div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">
+          ${isDoable ? '✓ This target is mathematically achievable!' : '⚠️ This required score exceeds 100% based on current weighting.'}
+        </div>
+      `;
+    });
   }
 
-  // --- CLASSES VIEW ---
+  // --- VIEW: CLASSES DIRECTORY ---
   function renderClassesView() {
     const container = document.getElementById('view-classes');
     if (!container) return;
@@ -2557,312 +2242,176 @@
     container.innerHTML = `
       <div class="section-header">
         <div>
-          <h1 class="section-title">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-            Classes & Course Directory
-          </h1>
-          <p class="section-subtitle">Manage enrolled courses, instructors, credit hours, and grading weight categories.</p>
+          <h1 class="section-title">Courses & Classes</h1>
+          <p class="section-subtitle">Instructors, office hours, grade categories, and syllabus details.</p>
         </div>
         <div class="header-actions">
           <button class="btn-primary" id="btn-add-class">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Add Course
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>+ Add Course</span>
           </button>
         </div>
       </div>
 
-      <div class="classes-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1.25rem;">
-        ${classes.map(c => `
-          <div class="card-panel" style="border-top: 5px solid ${c.color}; margin-bottom:0;" data-class-id="${c.id}">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div class="classes-grid">
+        ${classes.length > 0 ? classes.map(c => `
+          <div class="class-card" data-class-id="${c.id}">
+            <div class="class-card-header">
               <div>
-                <span class="badge neutral" style="font-size:0.6875rem; margin-bottom:0.375rem;">${c.code || 'COURSE'}</span>
-                <h3 style="margin:0; font-size:1.125rem; font-weight:700;">${c.name}</h3>
+                <span class="badge" style="background:${c.color}20; color:${c.color}; margin-bottom:0.25rem;">${c.code || 'Course'}</span>
+                <div class="class-card-name">${c.name}</div>
               </div>
-              <div style="width:20px; height:20px; border-radius:4px; background:${c.color};"></div>
+              <div style="width:14px; height:14px; border-radius:50%; background:${c.color};"></div>
             </div>
 
-            <div style="margin-top:1rem; font-size:0.8125rem; color:var(--text-secondary); display:flex; flex-direction:column; gap:0.375rem;">
-              <div>👨‍🏫 <b>Instructor:</b> ${c.teacher || 'Not specified'}</div>
-              ${c.teacherEmail ? `<div>✉️ <b>Email:</b> <a href="mailto:${c.teacherEmail}" style="color:var(--accent);">${c.teacherEmail}</a></div>` : ''}
-              <div>📍 <b>Room:</b> ${c.room || 'TBD'}</div>
-              <div>🎓 <b>Credits:</b> ${c.credits || 3} Credit Hours</div>
+            <div style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:0.75rem; display:flex; flex-direction:column; gap:0.25rem;">
+              ${c.teacher ? `<div>👨‍🏫 ${c.teacher} ${c.teacherEmail ? `(<a href="mailto:${c.teacherEmail}" style="color:var(--accent); text-decoration:underline;">${c.teacherEmail}</a>)` : ''}</div>` : ''}
+              ${c.room ? `<div>📍 Room ${c.room}</div>` : ''}
+              <div>🎓 ${c.credits || 3} Credit Hours</div>
             </div>
 
-            ${c.notes ? `<p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.75rem; background:var(--bg-surface-hover); padding:0.5rem; border-radius:6px;">${c.notes}</p>` : ''}
+            <div style="margin-top:auto; border-top:1px solid var(--border-subtle); padding-top:0.625rem; font-size:0.75rem;">
+              <div style="font-weight:700; color:var(--text-muted); margin-bottom:0.25rem; font-size:0.6875rem; text-transform:uppercase;">Grading Categories:</div>
+              <div style="display:flex; flex-wrap:wrap; gap:0.25rem;">
+                ${(c.gradeCategories || []).map(cat => `<span class="badge neutral">${cat.name}: ${cat.weight}%</span>`).join('')}
+              </div>
+            </div>
 
-            <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1.25rem; padding-top:0.75rem; border-top:1px solid var(--border-subtle);">
-              <button class="btn-secondary btn-edit-class" style="padding:0.375rem 0.75rem; font-size:0.75rem;">Edit Course</button>
-              <button class="btn-secondary btn-delete-class" style="padding:0.375rem 0.75rem; font-size:0.75rem; color:var(--danger);">Delete</button>
+            <div style="display:flex; justify-content:flex-end; gap:0.375rem; margin-top:0.75rem; border-top:1px solid var(--border-subtle); padding-top:0.5rem;">
+              <button class="btn-ghost" data-action="edit-class" style="font-size:0.75rem;">Edit</button>
+              <button class="btn-ghost" data-action="delete-class" style="font-size:0.75rem; color:var(--danger);">Delete</button>
             </div>
           </div>
-        `).join('')}
+        `).join('') : `
+          <div class="empty-state-box" style="grid-column:1/-1;">
+            <div class="empty-state-icon">📚</div>
+            <div class="empty-state-title">No courses added</div>
+            <p class="empty-state-desc">Add your academic classes to manage timetables, calculate GPA, and track homework.</p>
+            <button class="btn-primary" id="btn-empty-class-create">+ Add Course</button>
+          </div>
+        `}
       </div>
     `;
 
-    container.querySelector('#btn-add-class').addEventListener('click', () => openClassModal());
+    container.querySelector('#btn-add-class')?.addEventListener('click', () => openClassModal());
+    container.querySelector('#btn-empty-class-create')?.addEventListener('click', () => openClassModal());
 
-    container.querySelectorAll('.card-panel[data-class-id]').forEach(card => {
-      const id = card.getAttribute('data-class-id');
-      
-      const btnEdit = card.querySelector('.btn-edit-class');
-      if (btnEdit) {
-        btnEdit.addEventListener('click', () => {
-          const cls = store.getClassById(id);
-          if (cls) openClassModal(cls);
-        });
-      }
+    container.querySelectorAll('[data-action="edit-class"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const classId = e.target.closest('.class-card').getAttribute('data-class-id');
+        const cls = store.getClassById(classId);
+        if (cls) openClassModal(cls);
+      });
+    });
 
-      const btnDelete = card.querySelector('.btn-delete-class');
-      if (btnDelete) {
-        btnDelete.addEventListener('click', () => {
-          if (confirm('Delete this course along with its assignments, exams, and schedule entries?')) {
-            store.deleteClass(id);
-            showToast('Course deleted', 'info');
-          }
-        });
-      }
+    container.querySelectorAll('[data-action="delete-class"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const classId = e.target.closest('.class-card').getAttribute('data-class-id');
+        if (confirm('Delete this course? All associated assignments and schedule slots will also be removed.')) {
+          store.deleteClass(classId);
+          showToast('Course deleted', 'info');
+        }
+      });
     });
   }
 
-  // --- ANALYTICS VIEW ---
+  // --- VIEW: ANALYTICS ---
   function renderAnalyticsView() {
     const container = document.getElementById('view-analytics');
     if (!container) return;
 
     const assignments = store.getAssignments();
-    const exams = store.getExams();
-    const classes = store.getClasses();
-
-    const total = assignments.length;
     const completed = assignments.filter(a => a.status === 'completed').length;
     const inProgress = assignments.filter(a => a.status === 'in-progress').length;
     const notStarted = assignments.filter(a => a.status === 'not-started').length;
+    const total = assignments.length;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     container.innerHTML = `
       <div class="section-header">
         <div>
-          <h1 class="section-title">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
-            Productivity & Academic Analytics
-          </h1>
-          <p class="section-subtitle">Workload distribution, completion velocity, and subject balance.</p>
+          <h1 class="section-title">Academic Analytics</h1>
+          <p class="section-subtitle">Workload distribution, task completion rates, and study performance.</p>
         </div>
       </div>
 
-      <div class="stat-cards-grid">
-        <div class="stat-card">
-          <div class="stat-icon-wrapper blue">📊</div>
-          <div class="stat-content">
-            <span class="stat-label">Total Workload</span>
-            <span class="stat-value">${total + exams.length} Items</span>
-            <span class="stat-subtext">${total} assignments + ${exams.length} exams</span>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon-wrapper emerald">✅</div>
-          <div class="stat-content">
-            <span class="stat-label">Finished Tasks</span>
-            <span class="stat-value">${completed}</span>
-            <span class="stat-subtext">${total > 0 ? Math.round((completed / total) * 100) : 0}% success rate</span>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon-wrapper amber">⏳</div>
-          <div class="stat-content">
-            <span class="stat-label">Active Work</span>
-            <span class="stat-value">${inProgress + notStarted}</span>
-            <span class="stat-subtext">${inProgress} currently in progress</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="dashboard-grid">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
         <div class="card-panel">
-          <h3 class="panel-title" style="margin-bottom:1rem;">Workload by Course</h3>
-          <div style="display:flex; flex-direction:column; gap:1rem;">
-            ${classes.map(c => {
-              const classTasks = assignments.filter(a => a.classId === c.id);
-              const pct = total > 0 ? (classTasks.length / total) * 100 : 0;
-              return `
-                <div>
-                  <div style="display:flex; justify-content:space-between; font-size:0.8125rem; font-weight:600; margin-bottom:0.25rem;">
-                    <span>${c.name}</span>
-                    <span>${classTasks.length} tasks (${Math.round(pct)}%)</span>
-                  </div>
-                  <div class="progress-bar-container" style="height:8px;">
-                    <div class="progress-bar-fill" style="width:${pct}%; background:${c.color};"></div>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
+          <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Overall Completion</div>
+          <div style="font-size:2rem; font-weight:800; color:var(--accent); margin:0.25rem 0;">${completionRate}%</div>
+          <div style="font-size:0.8125rem; color:var(--text-secondary);">${completed} of ${total} tasks completed</div>
         </div>
 
         <div class="card-panel">
-          <h3 class="panel-title" style="margin-bottom:1rem;">Task Status Distribution</h3>
-          <div style="display:flex; flex-direction:column; gap:0.75rem; font-size:0.875rem;">
-            <div style="display:flex; justify-content:space-between; padding:0.5rem; background:var(--bg-surface-hover); border-radius:6px;">
-              <span>Completed</span>
-              <span style="font-weight:700; color:var(--success);">${completed}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; padding:0.5rem; background:var(--bg-surface-hover); border-radius:6px;">
-              <span>In Progress</span>
-              <span style="font-weight:700; color:var(--warning);">${inProgress}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; padding:0.5rem; background:var(--bg-surface-hover); border-radius:6px;">
-              <span>Not Started</span>
-              <span style="font-weight:700; color:var(--text-muted);">${notStarted}</span>
-            </div>
-          </div>
+          <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">In Progress</div>
+          <div style="font-size:2rem; font-weight:800; color:var(--warning); margin:0.25rem 0;">${inProgress}</div>
+          <div style="font-size:0.8125rem; color:var(--text-secondary);">Currently working on</div>
+        </div>
+
+        <div class="card-panel">
+          <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Pending Start</div>
+          <div style="font-size:2rem; font-weight:800; color:var(--text-muted); margin:0.25rem 0;">${notStarted}</div>
+          <div style="font-size:0.8125rem; color:var(--text-secondary);">Not yet started</div>
         </div>
       </div>
     `;
   }
 
-  // --- SETTINGS VIEW ---
+  // --- VIEW: SETTINGS & BACKUP ---
   function renderSettingsView() {
     const container = document.getElementById('view-settings');
     if (!container) return;
 
     const data = store.getState();
-    const savedConfig = cloud.getSavedConfig() || {};
+    const studentName = data.settings.studentName || 'Student';
+    const schoolName = data.settings.schoolName || '';
+    const avatarColor = data.settings.avatarColor || AVATAR_PALETTES[0];
+    const initials = studentName.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
 
     container.innerHTML = `
       <div class="section-header">
         <div>
-          <h1 class="section-title">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-            Application Settings & Cloud Sync
-          </h1>
-          <p class="section-subtitle">Manage free Firebase cloud sync, data backup/restore, semesters, and preferences.</p>
+          <h1 class="section-title">Settings & Storage</h1>
+          <p class="section-subtitle">Local student profile, appearance preferences, calendar export, and data backups.</p>
         </div>
       </div>
 
-      <div style="max-width:760px; display:flex; flex-direction:column; gap:1.5rem;">
-        <!-- Local Account Card -->
+      <div style="max-width:760px; display:flex; flex-direction:column; gap:1.25rem;">
+        <!-- Local Profile Card -->
         <div class="card-panel" style="border-left: 5px solid var(--accent);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-            <h3 class="panel-title" style="margin:0;">👤 Local Account</h3>
-            <span class="badge success">✓ Data Saved Locally</span>
+            <h3 class="panel-title" style="margin:0;">👤 Student Profile</h3>
+            <span class="badge success">✓ Saved Locally in Browser</span>
           </div>
-          ${(() => {
-            const acct = accountManager.getActiveAccount();
-            return acct ? `
-              <div style="display:flex; align-items:center; gap:1rem; padding:0.875rem; background:var(--bg-surface-hover); border-radius:var(--radius-md); margin-bottom:1rem;">
-                <div class="user-avatar" style="width:44px; height:44px; font-size:1.1rem; background:${acct.avatarColor}; flex-shrink:0;">${acct.initials}</div>
-                <div>
-                  <div style="font-weight:700; font-size:0.9375rem; color:var(--text-primary);">${acct.name}</div>
-                  <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.125rem;">${acct.schoolName || 'Student'} · Account created ${new Date(acct.createdAt).toLocaleDateString()}</div>
-                </div>
-              </div>
-            ` : '';
-          })()}
-          <p style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:1rem;">
-            Your assignments, exams, and grades are stored locally in this browser. Use the export options below to back up your data.
-          </p>
-          <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
-            <button class="btn-primary" id="btn-open-cloud-modal">Manage Account</button>
-            <button class="btn-secondary" id="btn-switch-account" style="display:inline-flex; align-items:center; gap:0.375rem;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-              Switch Account
-            </button>
-            <button class="btn-secondary" id="btn-logout-account" style="display:inline-flex; align-items:center; gap:0.375rem; color:var(--danger); border-color:var(--danger-border);">
-              Log Out
-            </button>
+          
+          <div style="display:flex; align-items:center; gap:0.875rem; padding:0.75rem; background:var(--bg-surface-subtle); border-radius:var(--radius-md); margin-bottom:1rem;">
+            <div class="user-avatar" style="width:42px; height:42px; font-size:1rem; background:${avatarColor};">${initials}</div>
+            <div>
+              <div style="font-weight:700; font-size:0.9375rem; color:var(--text-primary);">${studentName}</div>
+              <div style="font-size:0.75rem; color:var(--text-secondary);">${schoolName || 'Student Workspace'} · All data preserved across refreshes</div>
+            </div>
+          </div>
+          
+          <button class="btn-primary" id="btn-settings-edit-profile">Edit Profile Details</button>
+        </div>
+
+        <!-- Appearance -->
+        <div class="card-panel">
+          <h3 class="panel-title" style="margin-bottom:0.75rem;">Appearance & Theme</h3>
+          <div style="display:flex; gap:0.75rem;">
+            <button class="btn-secondary" id="btn-theme-light">☀️ Light Theme</button>
+            <button class="btn-secondary" id="btn-theme-dark">🌙 Dark Theme</button>
           </div>
         </div>
 
-        <!-- Cloud Sync Card (Optional) -->
+        <!-- Export & Backup Card -->
         <div class="card-panel">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-            <h3 class="panel-title" style="margin:0;">☁️ Cloud Sync (Optional)</h3>
-            <span class="badge ${cloud.currentUser ? 'success' : 'neutral'}">
-              ${cloud.currentUser ? '🟢 Connected' : 'Not Connected'}
-            </span>
-          </div>
+          <h3 class="panel-title" style="margin-bottom:0.5rem;">Data Export & Backup</h3>
           <p style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:1rem;">
-            ${cloud.currentUser 
-              ? `Syncing to Firebase as <b>${cloud.currentUser.email}</b>.`
-              : `Optionally connect Firebase to sync across devices. Not required — local accounts work fully offline.`
-            }
-          </p>
-          <button class="btn-secondary" id="btn-open-firebase-settings" style="display:inline-flex; align-items:center; gap:0.375rem;">
-            ${cloud.currentUser ? 'Manage Cloud Connection' : 'Configure Firebase (Advanced)'}
-          </button>
-        </div>
-
-        <!-- Firebase Configuration Setup -->
-        <div class="card-panel">
-          <h3 class="panel-title" style="margin-bottom:0.5rem;">🔥 Firebase Project Setup (100% Free)</h3>
-          <p style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:1rem;">
-            To connect to your own Firebase project, create a free project at <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent); text-decoration:underline;">console.firebase.google.com</a> and paste your Web App config below.
+            Export calendar feed (.ics) for Google/Apple Calendar, or download a full JSON backup.
           </p>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">API Key</label>
-              <input type="text" class="form-control" id="fb-api-key" placeholder="AIzaSy..." value="${savedConfig.apiKey || ''}" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Auth Domain</label>
-              <input type="text" class="form-control" id="fb-auth-domain" placeholder="your-app.firebaseapp.com" value="${savedConfig.authDomain || ''}" />
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Project ID</label>
-              <input type="text" class="form-control" id="fb-project-id" placeholder="your-app-id" value="${savedConfig.projectId || ''}" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Storage Bucket</label>
-              <input type="text" class="form-control" id="fb-storage-bucket" placeholder="your-app.appspot.com" value="${savedConfig.storageBucket || ''}" />
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Messaging Sender ID</label>
-              <input type="text" class="form-control" id="fb-sender-id" placeholder="123456789" value="${savedConfig.messagingSenderId || ''}" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">App ID</label>
-              <input type="text" class="form-control" id="fb-app-id" placeholder="1:123:web:abc" value="${savedConfig.appId || ''}" />
-            </div>
-          </div>
-
-          <button class="btn-primary" id="btn-save-firebase-config" style="margin-top:0.5rem;">
-            Save Firebase Keys & Connect
-          </button>
-        </div>
-
-        <!-- Profile Card -->
-        <div class="card-panel">
-          <h3 class="panel-title" style="margin-bottom:1rem;">Student Profile</h3>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Student Name</label>
-              <input type="text" class="form-control" id="settings-student-name" value="${data.settings.studentName || 'Alex Morgan'}" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">School / University</label>
-              <input type="text" class="form-control" id="settings-school-name" value="${data.settings.schoolName || 'Westwood Academy'}" />
-            </div>
-          </div>
-          <button class="btn-primary" id="btn-save-profile">Save Profile</button>
-        </div>
-
-        <!-- Data Export & Backup Card -->
-        <div class="card-panel">
-          <h3 class="panel-title" style="margin-bottom:1rem;">Export & Integrations</h3>
-          <p style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:1rem;">
-            Export your assignments and exams to external calendar apps (Google Calendar, Apple Calendar, Outlook) or download full JSON backups.
-          </p>
-
-          <div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
+          <div style="display:flex; flex-wrap:wrap; gap:0.625rem;">
             <button class="btn-secondary" id="btn-export-ical">
               📅 Download iCal (.ics) Calendar Feed
             </button>
@@ -2876,90 +2425,47 @@
           </div>
         </div>
 
-        <!-- Reset & Presets -->
-        <div class="card-panel" style="border-color:var(--danger-border);">
-          <h3 class="panel-title" style="margin-bottom:0.5rem; color:var(--danger);">Reset / Load Demo Presets</h3>
+        <!-- Sample Data & Reset -->
+        <div class="card-panel">
+          <h3 class="panel-title" style="margin-bottom:0.5rem;">Demo Data & Reset</h3>
           <p style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:1rem;">
-            Reset all stored assignments, classes, and exams back to the comprehensive default sample dataset.
+            Load sample courses and assignments for testing, or reset all data back to zero.
           </p>
-          <button class="btn-secondary" id="btn-reset-demo" style="color:var(--danger); border-color:var(--danger-border);">
-            🔄 Reset to Default Sample Data
-          </button>
+          <div style="display:flex; gap:0.625rem; flex-wrap:wrap;">
+            <button class="btn-secondary" id="btn-load-demo-settings">
+              ✨ Load Sample / Demo Data
+            </button>
+            <button class="btn-secondary" id="btn-reset-clean-settings" style="color:var(--danger); border-color:var(--danger-border);">
+              🔄 Reset to Clean Zero State
+            </button>
+          </div>
         </div>
       </div>
     `;
 
-    container.querySelector('#btn-open-cloud-modal').addEventListener('click', () => openAccountModal());
+    container.querySelector('#btn-settings-edit-profile')?.addEventListener('click', () => openProfileModal());
 
-    // Switch account button
-    const switchBtn = container.querySelector('#btn-switch-account');
-    if (switchBtn) {
-      switchBtn.addEventListener('click', () => {
-        accountManager.logout();
-        showWelcomeScreen();
-      });
-    }
-
-    // Logout button
-    const logoutBtn = container.querySelector('#btn-logout-account');
-    if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => {
-        if (confirm('Log out of this account? Your data will remain saved and you can log back in anytime.')) {
-          accountManager.logout();
-          showWelcomeScreen();
-        }
-      });
-    }
-
-    // Firebase settings toggle
-    const fbSettingsBtn = container.querySelector('#btn-open-firebase-settings');
-    if (fbSettingsBtn) {
-      fbSettingsBtn.addEventListener('click', () => openAuthModal());
-    }
-
-    container.querySelector('#btn-save-firebase-config')?.addEventListener('click', () => {
-      const config = {
-        apiKey: container.querySelector('#fb-api-key').value.trim(),
-        authDomain: container.querySelector('#fb-auth-domain').value.trim(),
-        projectId: container.querySelector('#fb-project-id').value.trim(),
-        storageBucket: container.querySelector('#fb-storage-bucket').value.trim(),
-        messagingSenderId: container.querySelector('#fb-sender-id').value.trim(),
-        appId: container.querySelector('#fb-app-id').value.trim(),
-      };
-
-      if (!config.apiKey || !config.projectId) {
-        alert('Please fill in at least the API Key and Project ID.');
-        return;
-      }
-
-      cloud.saveConfig(config);
-      showToast('Firebase configuration saved! Connecting...', 'success');
-      setTimeout(() => renderSettingsView(), 1000);
+    container.querySelector('#btn-theme-light')?.addEventListener('click', () => {
+      store.updateSettings({ theme: 'light' });
+      applyTheme('light');
+      showToast('Light theme applied', 'info');
+    });
+    container.querySelector('#btn-theme-dark')?.addEventListener('click', () => {
+      store.updateSettings({ theme: 'dark' });
+      applyTheme('dark');
+      showToast('Dark theme applied', 'info');
     });
 
-    container.querySelector('#btn-save-profile').addEventListener('click', () => {
-      const studentName = container.querySelector('#settings-student-name').value.trim();
-      const schoolName = container.querySelector('#settings-school-name').value.trim();
-      store.updateSettings({ studentName, schoolName });
-      // Sync to account manager
-      const acct = accountManager.getActiveAccount();
-      if (acct) {
-        accountManager.updateAccount(acct.id, { name: studentName, schoolName });
-      }
-      updateSidebarUserFromAccount();
-      showToast('Profile updated successfully', 'success');
-    });
-
-    container.querySelector('#btn-export-ical').addEventListener('click', () => {
+    container.querySelector('#btn-export-ical')?.addEventListener('click', () => {
       const icsContent = store.generateICalString();
-      downloadFile(icsContent, 'academiapro-schedule.ics', 'text/calendar');
-      showToast('iCal calendar file downloaded!', 'success');
+      downloadFile(icsContent, 'academiapro-calendar.ics', 'text/calendar');
+      showToast('iCal calendar downloaded!', 'success');
     });
 
-    container.querySelector('#btn-export-json').addEventListener('click', () => {
+    container.querySelector('#btn-export-json')?.addEventListener('click', () => {
       const jsonStr = JSON.stringify(store.getState(), null, 2);
       downloadFile(jsonStr, 'academiapro-backup.json', 'application/json');
-      showToast('JSON backup file downloaded!', 'success');
+      showToast('JSON backup downloaded!', 'success');
     });
 
     const importInput = container.querySelector('#input-import-json');
@@ -2971,10 +2477,10 @@
         reader.onload = (event) => {
           try {
             const parsed = JSON.parse(event.target.result);
-            store.saveToStorage(parsed);
-            store.data = parsed;
+            store.data = store.validateAndMigrate(parsed);
+            store.saveToStorage(store.data);
             store.notify('data_imported');
-            showToast('Data restored successfully from backup!', 'success');
+            showToast('Data restored successfully!', 'success');
             renderSettingsView();
           } catch (err) {
             alert('Failed to parse backup JSON file: ' + err.message);
@@ -2984,285 +2490,190 @@
       });
     }
 
-    container.querySelector('#btn-reset-demo').addEventListener('click', () => {
-      if (confirm('Are you sure you want to reset all planner data to default sample items?')) {
-        store.resetToSampleData();
-        showToast('Planner reset to sample data', 'info');
+    container.querySelector('#btn-load-demo-settings')?.addEventListener('click', () => {
+      if (confirm('Load sample courses, assignments, and exams for testing?')) {
+        store.loadDemoDataPreset();
+        showToast('Sample demo data loaded!', 'success');
+        renderSettingsView();
+      }
+    });
+
+    container.querySelector('#btn-reset-clean-settings')?.addEventListener('click', () => {
+      if (confirm('Permanently reset all coursework, tasks, and classes to a clean zero state?')) {
+        store.resetToEmptyData();
+        showToast('Planner reset to zero state', 'info');
         renderSettingsView();
       }
     });
   }
 
-  // --- LOCAL ACCOUNT MANAGEMENT MODAL ---
-  function openAccountModal() {
-    const acct = accountManager.getActiveAccount();
-    if (!acct) return;
+  // --- MODALS ENGINE ---
 
-    const otherAccounts = accountManager.accounts.filter(a => a.id !== acct.id);
-    const otherAccountsHTML = otherAccounts.length > 0 ? `
-      <div style="margin-top:1rem;">
-        <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:0.5rem;">Other Accounts</div>
-        ${otherAccounts.map(a => `
-          <button class="modal-account-switch-btn" data-switch-id="${a.id}" style="display:flex; align-items:center; gap:0.75rem; width:100%; padding:0.625rem 0.75rem; border-radius:var(--radius-md); text-align:left; transition:background 150ms;">
-            <div class="user-avatar" style="width:32px; height:32px; font-size:0.75rem; background:${a.avatarColor}; flex-shrink:0;">${a.initials}</div>
-            <div style="flex:1; min-width:0;">
-              <div style="font-weight:600; font-size:0.875rem; color:var(--text-primary);">${a.name}</div>
-              <div style="font-size:0.6875rem; color:var(--text-muted);">${a.schoolName || 'Student'}</div>
-            </div>
-            <span style="font-size:0.75rem; color:var(--accent); font-weight:600;">Switch</span>
-          </button>
-        `).join('')}
-      </div>
-    ` : '';
+  function openModalHTML(htmlContent, onRenderCallback) {
+    if (!elements.modalContainer || !elements.modalOverlay) return;
+    elements.modalContainer.innerHTML = htmlContent;
+    elements.modalOverlay.classList.add('active');
+    state.modalContext = true;
 
-    const html = `
-      <div class="modal-dialog" style="max-width:480px;">
-        <div class="modal-header">
-          <h2 class="modal-title">My Account</h2>
-          <button class="modal-close-btn" id="modal-close">✕</button>
-        </div>
-        <div class="modal-body">
-          <div style="display:flex; align-items:center; gap:1rem; padding:1rem; background:var(--bg-surface-hover); border-radius:var(--radius-md); margin-bottom:1.25rem;">
-            <div class="user-avatar" style="width:52px; height:52px; font-size:1.25rem; background:${acct.avatarColor}; flex-shrink:0;">${acct.initials}</div>
-            <div style="flex:1; min-width:0;">
-              <div style="font-weight:700; font-size:1.0625rem; color:var(--text-primary);">${acct.name}</div>
-              <div style="font-size:0.8125rem; color:var(--text-secondary); margin-top:0.125rem;">${acct.schoolName || 'Student'}</div>
-              <div style="font-size:0.6875rem; color:var(--text-muted); margin-top:0.25rem;">
-                <span class="cloud-status-dot saved"></span> Data saved locally · Since ${new Date(acct.createdAt).toLocaleDateString()}
-              </div>
-            </div>
-          </div>
+    const closeBtn = elements.modalContainer.querySelector('#modal-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
 
-          <div style="margin-bottom:1rem;">
-            <h3 style="font-size:0.875rem; font-weight:700; margin-bottom:0.75rem; color:var(--text-primary);">Edit Profile</h3>
-            <div class="form-group" style="margin-bottom:0.75rem;">
-              <label class="form-label">Name</label>
-              <input type="text" class="form-control" id="acct-edit-name" value="${acct.name}" maxlength="60" />
-            </div>
-            <div class="form-group" style="margin-bottom:0.75rem;">
-              <label class="form-label">School</label>
-              <input type="text" class="form-control" id="acct-edit-school" value="${acct.schoolName || ''}" maxlength="100" />
-            </div>
-            <button class="btn-primary" id="btn-acct-save-profile" style="width:100%; justify-content:center;">Save Changes</button>
-          </div>
+    elements.modalOverlay.onclick = (e) => {
+      if (e.target === elements.modalOverlay) closeModal();
+    };
 
-          ${otherAccountsHTML}
-
-          <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid var(--border-default);">
-            <button class="btn-secondary" id="btn-acct-logout" style="justify-content:center;">
-              Log Out
-            </button>
-            <button class="btn-secondary" id="btn-acct-delete" style="justify-content:center; color:var(--danger); border-color:var(--danger-border);">
-              Delete This Account
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    openModalHTML(html, dialog => {
-      // Save profile changes
-      dialog.querySelector('#btn-acct-save-profile').addEventListener('click', () => {
-        const newName = dialog.querySelector('#acct-edit-name').value.trim();
-        const newSchool = dialog.querySelector('#acct-edit-school').value.trim();
-        if (!newName) return;
-        accountManager.updateAccount(acct.id, { name: newName, schoolName: newSchool });
-        store.updateSettings({ studentName: newName, schoolName: newSchool });
-        updateSidebarUserFromAccount();
-        showToast('Profile updated!', 'success');
-        closeModal();
-      });
-
-      // Switch to another account
-      dialog.querySelectorAll('.modal-account-switch-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const targetId = btn.getAttribute('data-switch-id');
-          accountManager.switchAccount(targetId);
-          store.reloadForAccount();
-          closeModal();
-          initApp();
-          showToast('Switched account!', 'info');
-        });
-      });
-
-      // Logout
-      dialog.querySelector('#btn-acct-logout').addEventListener('click', () => {
-        accountManager.logout();
-        closeModal();
-        showWelcomeScreen();
-      });
-
-      // Delete account
-      dialog.querySelector('#btn-acct-delete').addEventListener('click', () => {
-        if (confirm(`Are you sure you want to permanently delete the account "${acct.name}" and ALL its data? This cannot be undone.`)) {
-          accountManager.deleteAccount(acct.id);
-          closeModal();
-          showWelcomeScreen();
-          showToast('Account deleted', 'info');
-        }
-      });
-    });
-  }
-
-  // --- AUTH & CLOUD SYNC MODAL ---
-  function openAuthModal() {
-    const isLogged = cloud.currentUser;
-
-    if (isLogged) {
-      const html = `
-        <div class="modal-dialog" style="max-width:480px;">
-          <div class="modal-header">
-            <h2 class="modal-title">☁️ Cloud Sync & Account</h2>
-            <button class="modal-close-btn" id="modal-close">✕</button>
-          </div>
-          <div class="modal-body">
-            <div style="display:flex; align-items:center; gap:1rem; padding:1rem; background:var(--bg-surface-hover); border-radius:var(--radius-md); margin-bottom:1.25rem;">
-              <div class="user-avatar" style="width:48px; height:48px; font-size:1.25rem;">
-                ${(cloud.currentUser.email || 'AM').slice(0, 2).toUpperCase()}
-              </div>
-              <div style="overflow:hidden;">
-                <div style="font-weight:700; font-size:1rem; color:var(--text-primary); text-overflow:ellipsis; overflow:hidden;">
-                  ${cloud.currentUser.email}
-                </div>
-                <div style="font-size:0.75rem; color:var(--success); font-weight:600; margin-top:0.25rem;">
-                  🟢 Realtime Cloud Sync Active
-                </div>
-              </div>
-            </div>
-
-            <div style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:1.25rem; line-height:1.6;">
-              <p><b>User ID:</b> <code style="font-family:var(--font-mono); font-size:0.75rem;">${cloud.currentUser.uid}</code></p>
-              <p style="margin-top:0.5rem;">Your homework, exams, and classes are synchronized automatically with Cloud Firestore. Any iOS app you build with this user account will share this exact data.</p>
-            </div>
-
-            <div style="display:flex; flex-direction:column; gap:0.75rem;">
-              <button class="btn-primary" id="btn-force-cloud-sync" style="justify-content:center;">
-                🔄 Sync Now to Cloud
-              </button>
-              <button class="btn-secondary" id="btn-cloud-logout" style="justify-content:center; color:var(--danger);">
-                Log Out of Account
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-
-      openModalHTML(html, dialog => {
-        dialog.querySelector('#btn-force-cloud-sync').addEventListener('click', async () => {
-          await cloud.syncToCloud(store.getState());
-          showToast('Data uploaded and synced to Cloud!', 'success');
-        });
-        dialog.querySelector('#btn-cloud-logout').addEventListener('click', async () => {
-          await cloud.signOut();
-          showToast('Logged out of cloud account', 'info');
-          closeModal();
-          renderSettingsView();
-        });
-      });
-      return;
+    if (typeof onRenderCallback === 'function') {
+      onRenderCallback(elements.modalContainer);
     }
+  }
 
-    // Not logged in: Show Login / Register Tabs
+  function closeModal() {
+    if (elements.modalOverlay) elements.modalOverlay.classList.remove('active');
+    if (elements.modalContainer) elements.modalContainer.innerHTML = '';
+    state.modalContext = null;
+  }
+
+  // Quick Add Universal Modal (Press Q or Click + Add)
+  function openQuickAddModal() {
     const html = `
-      <div class="modal-dialog" style="max-width:480px;">
+      <div class="modal-dialog">
         <div class="modal-header">
-          <h2 class="modal-title">Free Cloud Account</h2>
+          <h2 class="modal-title">Quick Add</h2>
           <button class="modal-close-btn" id="modal-close">✕</button>
         </div>
-
         <div class="modal-body">
-          <div class="auth-tabs-header">
-            <button class="auth-tab-btn active" id="tab-sign-in">Sign In</button>
-            <button class="auth-tab-btn" id="tab-register">Create Account</button>
-          </div>
-
-          <div id="auth-alert-message" class="auth-alert-box"></div>
-
-          <form id="form-auth">
-            <div class="form-group" id="group-display-name" style="display:none;">
-              <label class="form-label">Full Name</label>
-              <input type="text" class="form-control" id="auth-name" placeholder="Alex Morgan" />
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Email Address *</label>
-              <input type="email" class="form-control" id="auth-email" required placeholder="student@school.edu" />
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Password *</label>
-              <input type="password" class="form-control" id="auth-password" required minlength="6" placeholder="At least 6 characters" />
-            </div>
-
-            <button type="submit" class="btn-primary" id="btn-auth-submit" style="width:100%; justify-content:center; padding:0.75rem; margin-top:0.5rem;">
-              Sign In
+          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.75rem; margin-bottom:1rem;">
+            <button class="onboarding-step-item" id="quick-btn-task" style="text-align:center; cursor:pointer;">
+              <span style="font-size:1.5rem; margin-bottom:0.25rem;">📋</span>
+              <span style="font-weight:700; font-size:0.875rem;">Assignment</span>
             </button>
-          </form>
-
-          <p style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-top:1.25rem; line-height:1.5;">
-            🔒 100% Free with Firebase Authentication & Cloud Firestore.<br>
-            Enables instant cross-device sync on Web and your future iOS app.
-          </p>
+            <button class="onboarding-step-item" id="quick-btn-exam" style="text-align:center; cursor:pointer;">
+              <span style="font-size:1.5rem; margin-bottom:0.25rem;">📝</span>
+              <span style="font-weight:700; font-size:0.875rem;">Exam</span>
+            </button>
+            <button class="onboarding-step-item" id="quick-btn-class" style="text-align:center; cursor:pointer;">
+              <span style="font-size:1.5rem; margin-bottom:0.25rem;">📚</span>
+              <span style="font-weight:700; font-size:0.875rem;">Course</span>
+            </button>
+          </div>
         </div>
       </div>
     `;
 
     openModalHTML(html, dialog => {
-      let isRegister = false;
-      const tabSignIn = dialog.querySelector('#tab-sign-in');
-      const tabRegister = dialog.querySelector('#tab-register');
-      const groupName = dialog.querySelector('#group-display-name');
-      const btnSubmit = dialog.querySelector('#btn-auth-submit');
-      const alertBox = dialog.querySelector('#auth-alert-message');
-      const form = dialog.querySelector('#form-auth');
-
-      tabSignIn.addEventListener('click', () => {
-        isRegister = false;
-        tabSignIn.classList.add('active');
-        tabRegister.classList.remove('active');
-        groupName.style.display = 'none';
-        btnSubmit.textContent = 'Sign In';
-        alertBox.className = 'auth-alert-box';
+      dialog.querySelector('#quick-btn-task')?.addEventListener('click', () => {
+        closeModal();
+        openAssignmentModal();
       });
-
-      tabRegister.addEventListener('click', () => {
-        isRegister = true;
-        tabRegister.classList.add('active');
-        tabSignIn.classList.remove('active');
-        groupName.style.display = 'block';
-        btnSubmit.textContent = 'Create Free Account';
-        alertBox.className = 'auth-alert-box';
+      dialog.querySelector('#quick-btn-exam')?.addEventListener('click', () => {
+        closeModal();
+        openExamModal();
       });
-
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = dialog.querySelector('#auth-email').value.trim();
-        const password = dialog.querySelector('#auth-password').value;
-        const name = dialog.querySelector('#auth-name').value.trim();
-
-        btnSubmit.disabled = true;
-        btnSubmit.textContent = 'Processing...';
-
-        try {
-          if (isRegister) {
-            await cloud.signUp(email, password, name);
-            showToast('🎉 Free cloud account created! Syncing...', 'success');
-          } else {
-            await cloud.signIn(email, password);
-            showToast('✓ Signed in! Cloud data synced.', 'success');
-          }
-          closeModal();
-        } catch (err) {
-          alertBox.className = 'auth-alert-box danger';
-          alertBox.textContent = err.message || 'Authentication error. Please check your credentials or Firebase settings.';
-          btnSubmit.disabled = false;
-          btnSubmit.textContent = isRegister ? 'Create Free Account' : 'Sign In';
-        }
+      dialog.querySelector('#quick-btn-class')?.addEventListener('click', () => {
+        closeModal();
+        openClassModal();
       });
     });
   }
 
-  // --- MODALS ---
+  // Profile Modal
+  function openProfileModal() {
+    const data = store.getState();
+    const curName = data.settings.studentName || 'Student';
+    const curSchool = data.settings.schoolName || '';
+    const curColor = data.settings.avatarColor || AVATAR_PALETTES[0];
+    const initials = curName.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+
+    const html = `
+      <div class="modal-dialog" style="max-width:440px;">
+        <div class="modal-header">
+          <h2 class="modal-title">Student Profile</h2>
+          <button class="modal-close-btn" id="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="display:flex; align-items:center; gap:0.875rem; padding:0.875rem; background:var(--bg-surface-subtle); border-radius:var(--radius-md); margin-bottom:1rem;">
+            <div class="user-avatar" id="modal-avatar-preview" style="width:48px; height:48px; font-size:1.125rem; background:${curColor};">${initials}</div>
+            <div>
+              <div style="font-weight:700; font-size:1rem; color:var(--text-primary);" id="modal-name-preview">${curName}</div>
+              <div style="font-size:0.75rem; color:var(--text-secondary);">${curSchool || 'Student Workspace'}</div>
+            </div>
+          </div>
+
+          <form id="form-profile">
+            <div class="form-group">
+              <label class="form-label">Full Name</label>
+              <input type="text" class="form-control" id="profile-input-name" value="${curName}" required maxlength="60" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">School / University</label>
+              <input type="text" class="form-control" id="profile-input-school" value="${curSchool}" placeholder="e.g. Westwood Academy" maxlength="100" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Avatar Color Theme</label>
+              <div style="display:flex; gap:0.375rem; flex-wrap:wrap;" id="profile-color-picker">
+                ${AVATAR_PALETTES.map((c, i) => `
+                  <button type="button" class="avatar-color-option ${c === curColor ? 'selected' : ''}" data-color="${c}" style="background:${c}; width:28px; height:28px;"></button>
+                `).join('')}
+              </div>
+            </div>
+
+            <div class="modal-footer" style="padding-left:0; padding-right:0; padding-bottom:0; background:none;">
+              <button type="button" class="btn-secondary" id="modal-cancel">Cancel</button>
+              <button type="submit" class="btn-primary">Save Profile</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    openModalHTML(html, dialog => {
+      dialog.querySelector('#modal-cancel')?.addEventListener('click', closeModal);
+
+      let chosenColor = curColor;
+
+      dialog.querySelectorAll('#profile-color-picker .avatar-color-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+          dialog.querySelectorAll('#profile-color-picker .avatar-color-option').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          chosenColor = btn.getAttribute('data-color');
+          const av = dialog.querySelector('#modal-avatar-preview');
+          if (av) av.style.background = chosenColor;
+        });
+      });
+
+      const nameIn = dialog.querySelector('#profile-input-name');
+      nameIn?.addEventListener('input', () => {
+        const val = nameIn.value.trim();
+        const init = val.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+        const av = dialog.querySelector('#modal-avatar-preview');
+        const np = dialog.querySelector('#modal-name-preview');
+        if (av) av.textContent = init;
+        if (np) np.textContent = val || 'Student';
+      });
+
+      const form = dialog.querySelector('#form-profile');
+      form?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const newName = nameIn.value.trim();
+        const newSchool = dialog.querySelector('#profile-input-school').value.trim();
+        if (!newName) return;
+
+        store.updateSettings({
+          studentName: newName,
+          schoolName: newSchool,
+          avatarColor: chosenColor,
+          isProfileConfigured: true
+        });
+
+        showToast('Profile saved!', 'success');
+        closeModal();
+      });
+    });
+  }
+
+  // Assignment Modal
   function openAssignmentModal(existing = null) {
     const classes = store.getClasses();
     const isEdit = !!existing;
@@ -3273,19 +2684,18 @@
           <h2 class="modal-title">${isEdit ? 'Edit Assignment' : 'New Assignment'}</h2>
           <button class="modal-close-btn" id="modal-close">✕</button>
         </div>
-
         <div class="modal-body">
           <form id="form-assignment">
             <div class="form-group">
               <label class="form-label">Assignment Title *</label>
-              <input type="text" class="form-control" name="title" required placeholder="e.g. Chapter 6 Problem Set" value="${existing ? existing.title : ''}" />
+              <input type="text" class="form-control" name="title" required placeholder="e.g. Chapter 4 Problem Set" value="${existing ? existing.title : ''}" />
             </div>
 
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Course / Class *</label>
+                <label class="form-label">Course *</label>
                 <select class="form-control" name="classId" required id="modal-asg-class">
-                  ${classes.map(c => `<option value="${c.id}" ${existing && existing.classId === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                  ${classes.length > 0 ? classes.map(c => `<option value="${c.id}" ${existing && existing.classId === c.id ? 'selected' : ''}>${c.name}</option>`).join('') : '<option value="">No courses added yet</option>'}
                 </select>
               </div>
 
@@ -3298,7 +2708,6 @@
                   <option value="lab" ${existing && existing.type === 'lab' ? 'selected' : ''}>Lab Report</option>
                   <option value="quiz" ${existing && existing.type === 'quiz' ? 'selected' : ''}>Quiz</option>
                   <option value="reading" ${existing && existing.type === 'reading' ? 'selected' : ''}>Reading</option>
-                  <option value="other" ${existing && existing.type === 'other' ? 'selected' : ''}>Other</option>
                 </select>
               </div>
             </div>
@@ -3306,7 +2715,7 @@
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Due Date & Time *</label>
-                <input type="datetime-local" class="form-control" name="dueDate" required value="${existing && existing.dueDate ? existing.dueDate.slice(0, 16) : getRelativeInputDate(1)}" />
+                <input type="datetime-local" class="form-control" name="dueDate" required value="${existing ? (existing.dueDate ? existing.dueDate.slice(0, 16) : '') : getRelativeDate(1, '23:59').slice(0, 16)}" />
               </div>
 
               <div class="form-group">
@@ -3320,107 +2729,47 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label">Instructions / Description</label>
-              <textarea class="form-control" name="description" placeholder="Add assignment details or instructions...">${existing ? existing.description || '' : ''}</textarea>
+              <label class="form-label">Description / Instructions</label>
+              <textarea class="form-control" name="description" placeholder="Instructions, rubric links, questions...">${existing ? (existing.description || '') : ''}</textarea>
             </div>
 
-            <div class="form-group">
-              <label class="form-label" style="display:flex; justify-content:space-between;">
-                <span>Subtasks & Checklists</span>
-                <button type="button" id="btn-add-subtask-row" style="color:var(--accent); font-weight:600; font-size:0.75rem;">+ Add Step</button>
-              </label>
-              <div id="subtasks-inputs-list" style="display:flex; flex-direction:column; gap:0.5rem;">
-                ${(existing && existing.subtasks ? existing.subtasks : []).map(st => `
-                  <div class="subtask-row-item" style="display:flex; gap:0.5rem;">
-                    <input type="text" class="form-control subtask-title-input" value="${st.title}" placeholder="Step title" />
-                    <button type="button" class="btn-remove-subtask" style="color:var(--danger); padding:0 0.5rem;">✕</button>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Grade Score Earned</label>
-                <input type="number" class="form-control" name="scoreEarned" placeholder="Optional" value="${existing && existing.scoreEarned !== null ? existing.scoreEarned : ''}" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Max Score Possible</label>
-                <input type="number" class="form-control" name="maxScore" value="${existing && existing.maxScore ? existing.maxScore : '100'}" />
-              </div>
+            <div class="modal-footer" style="padding-left:0; padding-right:0; padding-bottom:0; background:none;">
+              <button type="button" class="btn-secondary" id="modal-cancel">Cancel</button>
+              <button type="submit" class="btn-primary">${isEdit ? 'Save Changes' : 'Create Assignment'}</button>
             </div>
           </form>
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn-secondary" id="modal-cancel">Cancel</button>
-          <button class="btn-primary" id="modal-submit">${isEdit ? 'Save Changes' : 'Create Assignment'}</button>
         </div>
       </div>
     `;
 
-    openModalHTML(html, (dialog) => {
-      const btnAddSubtask = dialog.querySelector('#btn-add-subtask-row');
-      const subtasksList = dialog.querySelector('#subtasks-inputs-list');
-      btnAddSubtask.addEventListener('click', () => {
-        const div = document.createElement('div');
-        div.className = 'subtask-row-item';
-        div.style.cssText = 'display:flex; gap:0.5rem;';
-        div.innerHTML = `
-          <input type="text" class="form-control subtask-title-input" placeholder="Next step..." />
-          <button type="button" class="btn-remove-subtask" style="color:var(--danger); padding:0 0.5rem;">✕</button>
-        `;
-        subtasksList.appendChild(div);
-        div.querySelector('.btn-remove-subtask').addEventListener('click', () => div.remove());
-      });
-
-      dialog.querySelectorAll('.btn-remove-subtask').forEach(btn => {
-        btn.addEventListener('click', (e) => e.target.closest('.subtask-row-item').remove());
-      });
-
-      dialog.querySelector('#modal-submit').addEventListener('click', () => {
-        const form = dialog.querySelector('#form-assignment');
-        if (!form.checkValidity()) {
-          form.reportValidity();
-          return;
-        }
-
-        const formData = new FormData(form);
-        const subtaskTitles = Array.from(dialog.querySelectorAll('.subtask-title-input'))
-          .map(i => i.value.trim())
-          .filter(t => t.length > 0);
-
-        const subtasks = subtaskTitles.map((t, idx) => ({
-          id: 'st-' + idx + '-' + Date.now(),
-          title: t,
-          isCompleted: existing && existing.subtasks && existing.subtasks[idx] ? existing.subtasks[idx].isCompleted : false
-        }));
-
-        const payload = {
-          title: formData.get('title'),
-          classId: formData.get('classId'),
-          type: formData.get('type'),
-          dueDate: formData.get('dueDate'),
-          priority: formData.get('priority'),
-          description: formData.get('description'),
-          scoreEarned: formData.get('scoreEarned'),
-          maxScore: formData.get('maxScore'),
-          subtasks
+    openModalHTML(html, dialog => {
+      dialog.querySelector('#modal-cancel')?.addEventListener('click', closeModal);
+      const form = dialog.querySelector('#form-assignment');
+      form?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const data = {
+          title: fd.get('title').trim(),
+          classId: fd.get('classId'),
+          type: fd.get('type'),
+          dueDate: fd.get('dueDate'),
+          priority: fd.get('priority'),
+          description: fd.get('description').trim()
         };
 
         if (isEdit) {
-          store.updateAssignment(existing.id, payload);
+          store.updateAssignment(existing.id, data);
           showToast('Assignment updated', 'success');
         } else {
-          store.addAssignment(payload);
+          store.addAssignment(data);
           showToast('Assignment created!', 'success');
         }
-
         closeModal();
       });
     });
   }
 
+  // Exam Modal
   function openExamModal(existing = null) {
     const classes = store.getClasses();
     const isEdit = !!existing;
@@ -3431,241 +2780,213 @@
           <h2 class="modal-title">${isEdit ? 'Edit Exam' : 'Schedule Exam'}</h2>
           <button class="modal-close-btn" id="modal-close">✕</button>
         </div>
-
         <div class="modal-body">
           <form id="form-exam">
             <div class="form-group">
-              <label class="form-label">Exam / Test Title *</label>
-              <input type="text" class="form-control" name="title" required placeholder="e.g. Calculus Midterm Examination" value="${existing ? existing.title : ''}" />
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Course / Class *</label>
-              <select class="form-control" name="classId" required>
-                ${classes.map(c => `<option value="${c.id}" ${existing && existing.classId === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
-              </select>
+              <label class="form-label">Exam Title *</label>
+              <input type="text" class="form-control" name="title" required placeholder="e.g. Midterm Examination" value="${existing ? existing.title : ''}" />
             </div>
 
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Exam Date *</label>
-                <input type="date" class="form-control" name="date" required value="${existing ? existing.date : getRelativeInputDate(7).split('T')[0]}" />
+                <label class="form-label">Course *</label>
+                <select class="form-control" name="classId" required>
+                  ${classes.map(c => `<option value="${c.id}" ${existing && existing.classId === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                </select>
               </div>
 
+              <div class="form-group">
+                <label class="form-label">Exam Date *</label>
+                <input type="date" class="form-control" name="date" required value="${existing ? existing.date : getRelativeDate(7, '').split('T')[0]}" />
+              </div>
+            </div>
+
+            <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Start Time</label>
                 <input type="time" class="form-control" name="startTime" value="${existing ? existing.startTime : '09:00'}" />
               </div>
-            </div>
 
-            <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Duration (Minutes)</label>
-                <input type="number" class="form-control" name="duration" value="${existing ? existing.duration : '90'}" />
-              </div>
-
-              <div class="form-group">
-                <label class="form-label">Location / Room</label>
-                <input type="text" class="form-control" name="room" placeholder="e.g. Science Hall 304" value="${existing ? existing.room || '' : ''}" />
+                <input type="number" class="form-control" name="duration" value="${existing ? existing.duration : 90}" />
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Seat Assigned (Optional)</label>
-                <input type="text" class="form-control" name="seatNumber" placeholder="e.g. Seat 14" value="${existing ? existing.seatNumber || '' : ''}" />
+                <label class="form-label">Room / Hall</label>
+                <input type="text" class="form-control" name="room" placeholder="e.g. Science Bldg 304" value="${existing ? existing.room : ''}" />
               </div>
 
               <div class="form-group">
-                <label class="form-label">Status</label>
-                <select class="form-control" name="status">
-                  <option value="upcoming" ${!existing || existing.status === 'upcoming' ? 'selected' : ''}>Upcoming</option>
-                  <option value="completed" ${existing && existing.status === 'completed' ? 'selected' : ''}>Completed</option>
-                </select>
+                <label class="form-label">Seat / Station Number</label>
+                <input type="text" class="form-control" name="seatNumber" placeholder="e.g. Seat 14" value="${existing ? existing.seatNumber : ''}" />
               </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Study Topics (comma-separated)</label>
-              <input type="text" class="form-control" name="topics" placeholder="Limits, Integrals, Series" value="${existing && existing.topics ? existing.topics.join(', ') : ''}" />
+              <label class="form-label">Study Topics (comma separated)</label>
+              <input type="text" class="form-control" name="topics" placeholder="Limits, Derivatives, Series Tests" value="${existing && Array.isArray(existing.topics) ? existing.topics.join(', ') : ''}" />
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Description / Format Notes</label>
-              <textarea class="form-control" name="description" placeholder="Calculator rules, question counts, etc.">${existing ? existing.description || '' : ''}</textarea>
+            <div class="modal-footer" style="padding-left:0; padding-right:0; padding-bottom:0; background:none;">
+              <button type="button" class="btn-secondary" id="modal-cancel">Cancel</button>
+              <button type="submit" class="btn-primary">${isEdit ? 'Save Changes' : 'Schedule Exam'}</button>
             </div>
           </form>
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn-secondary" id="modal-cancel">Cancel</button>
-          <button class="btn-primary" id="modal-submit">${isEdit ? 'Save Changes' : 'Schedule Exam'}</button>
         </div>
       </div>
     `;
 
-    openModalHTML(html, (dialog) => {
-      dialog.querySelector('#modal-submit').addEventListener('click', () => {
-        const form = dialog.querySelector('#form-exam');
-        if (!form.checkValidity()) {
-          form.reportValidity();
-          return;
-        }
+    openModalHTML(html, dialog => {
+      dialog.querySelector('#modal-cancel')?.addEventListener('click', closeModal);
+      const form = dialog.querySelector('#form-exam');
+      form?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const rawTopics = fd.get('topics') || '';
+        const topics = rawTopics.split(',').map(t => t.trim()).filter(Boolean);
 
-        const formData = new FormData(form);
-        const rawTopics = formData.get('topics');
-        const topics = rawTopics ? rawTopics.split(',').map(t => t.trim()).filter(t => t.length > 0) : [];
-
-        const payload = {
-          title: formData.get('title'),
-          classId: formData.get('classId'),
-          date: formData.get('date'),
-          startTime: formData.get('startTime'),
-          duration: formData.get('duration'),
-          room: formData.get('room'),
-          seatNumber: formData.get('seatNumber'),
-          status: formData.get('status'),
-          topics,
-          description: formData.get('description')
+        const data = {
+          title: fd.get('title').trim(),
+          classId: fd.get('classId'),
+          date: fd.get('date'),
+          startTime: fd.get('startTime'),
+          duration: Number(fd.get('duration')),
+          room: fd.get('room').trim(),
+          seatNumber: fd.get('seatNumber').trim(),
+          topics
         };
 
         if (isEdit) {
-          store.updateExam(existing.id, payload);
+          store.updateExam(existing.id, data);
           showToast('Exam updated', 'success');
         } else {
-          store.addExam(payload);
+          store.addExam(data);
           showToast('Exam scheduled!', 'success');
         }
-
         closeModal();
       });
     });
   }
 
+  // Course Modal
   function openClassModal(existing = null) {
     const isEdit = !!existing;
-    let selectedColor = existing ? existing.color : SUBJECT_COLORS[0];
+    const currentColor = existing ? existing.color : SUBJECT_COLORS[0];
 
     const html = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h2 class="modal-title">${isEdit ? 'Edit Course' : 'Add New Course'}</h2>
+          <h2 class="modal-title">${isEdit ? 'Edit Course' : 'New Course'}</h2>
           <button class="modal-close-btn" id="modal-close">✕</button>
         </div>
-
         <div class="modal-body">
           <form id="form-class">
+            <div class="form-group">
+              <label class="form-label">Course Name *</label>
+              <input type="text" class="form-control" name="name" required placeholder="e.g. AP Calculus BC" value="${existing ? existing.name : ''}" />
+            </div>
+
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Course Name *</label>
-                <input type="text" class="form-control" name="name" required placeholder="e.g. AP Calculus BC" value="${existing ? existing.name : ''}" />
-              </div>
-              <div class="form-group">
                 <label class="form-label">Course Code</label>
-                <input type="text" class="form-control" name="code" placeholder="e.g. MATH 302" value="${existing ? existing.code || '' : ''}" />
+                <input type="text" class="form-control" name="code" placeholder="e.g. MATH 302" value="${existing ? existing.code : ''}" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Credit Hours</label>
+                <input type="number" class="form-control" name="credits" value="${existing ? existing.credits : 3}" min="1" max="10" />
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Instructor Name</label>
-                <input type="text" class="form-control" name="teacher" placeholder="e.g. Dr. Aris Thorne" value="${existing ? existing.teacher || '' : ''}" />
+                <input type="text" class="form-control" name="teacher" placeholder="e.g. Dr. Thorne" value="${existing ? existing.teacher : ''}" />
               </div>
+
               <div class="form-group">
                 <label class="form-label">Instructor Email</label>
-                <input type="email" class="form-control" name="teacherEmail" placeholder="teacher@school.edu" value="${existing ? existing.teacherEmail || '' : ''}" />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Default Room</label>
-                <input type="text" class="form-control" name="room" placeholder="e.g. Room 304" value="${existing ? existing.room || '' : ''}" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Credit Hours (for GPA)</label>
-                <input type="number" class="form-control" name="credits" value="${existing ? existing.credits : '3'}" min="1" max="6" />
+                <input type="email" class="form-control" name="teacherEmail" placeholder="teacher@school.edu" value="${existing ? existing.teacherEmail : ''}" />
               </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Course Color Accent</label>
-              <div class="color-picker-grid" id="modal-color-swatches">
-                ${SUBJECT_COLORS.map(color => `
-                  <div class="color-swatch ${color === selectedColor ? 'active' : ''}" style="background:${color};" data-color="${color}"></div>
+              <label class="form-label">Class Color</label>
+              <div style="display:flex; gap:0.5rem; flex-wrap:wrap;" id="modal-color-picker">
+                ${SUBJECT_COLORS.map(c => `
+                  <button type="button" class="avatar-color-option ${c === currentColor ? 'selected' : ''}" data-color="${c}" style="background:${c}; width:28px; height:28px;"></button>
                 `).join('')}
               </div>
+              <input type="hidden" name="color" id="class-selected-color" value="${currentColor}" />
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Notes & Syllabus Info</label>
-              <textarea class="form-control" name="notes" placeholder="Office hours, grading rules, textbook requirements...">${existing ? existing.notes || '' : ''}</textarea>
+            <div class="modal-footer" style="padding-left:0; padding-right:0; padding-bottom:0; background:none;">
+              <button type="button" class="btn-secondary" id="modal-cancel">Cancel</button>
+              <button type="submit" class="btn-primary">${isEdit ? 'Save Changes' : 'Create Course'}</button>
             </div>
           </form>
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn-secondary" id="modal-cancel">Cancel</button>
-          <button class="btn-primary" id="modal-submit">${isEdit ? 'Save Changes' : 'Create Course'}</button>
         </div>
       </div>
     `;
 
-    openModalHTML(html, (dialog) => {
-      dialog.querySelectorAll('.color-swatch').forEach(swatch => {
-        swatch.addEventListener('click', () => {
-          dialog.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-          swatch.classList.add('active');
-          selectedColor = swatch.getAttribute('data-color');
+    openModalHTML(html, dialog => {
+      dialog.querySelector('#modal-cancel')?.addEventListener('click', closeModal);
+
+      dialog.querySelectorAll('#modal-color-picker .avatar-color-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+          dialog.querySelectorAll('#modal-color-picker .avatar-color-option').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          dialog.querySelector('#class-selected-color').value = btn.getAttribute('data-color');
         });
       });
 
-      dialog.querySelector('#modal-submit').addEventListener('click', () => {
-        const form = dialog.querySelector('#form-class');
-        if (!form.checkValidity()) {
-          form.reportValidity();
-          return;
-        }
-
-        const formData = new FormData(form);
-        const payload = {
-          name: formData.get('name'),
-          code: formData.get('code'),
-          teacher: formData.get('teacher'),
-          teacherEmail: formData.get('teacherEmail'),
-          room: formData.get('room'),
-          credits: formData.get('credits'),
-          color: selectedColor,
-          notes: formData.get('notes')
+      const form = dialog.querySelector('#form-class');
+      form?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const data = {
+          name: fd.get('name').trim(),
+          code: fd.get('code').trim(),
+          credits: Number(fd.get('credits')),
+          teacher: fd.get('teacher').trim(),
+          teacherEmail: fd.get('teacherEmail').trim(),
+          color: fd.get('color')
         };
 
         if (isEdit) {
-          store.updateClass(existing.id, payload);
+          store.updateClass(existing.id, data);
           showToast('Course updated', 'success');
         } else {
-          store.addClass(payload);
-          showToast('Course added!', 'success');
+          store.addClass(data);
+          showToast('Course created!', 'success');
         }
-
         closeModal();
       });
     });
   }
 
-  function openScheduleSlotModal() {
+  // Schedule Slot Modal
+  function openScheduleModal() {
     const classes = store.getClasses();
+    if (classes.length === 0) {
+      alert('Please add a course first before scheduling class times.');
+      openClassModal();
+      return;
+    }
 
     const html = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h2 class="modal-title">Add Class to Timetable</h2>
+          <h2 class="modal-title">Add Timetable Slot</h2>
           <button class="modal-close-btn" id="modal-close">✕</button>
         </div>
-
         <div class="modal-body">
           <form id="form-schedule">
             <div class="form-group">
-              <label class="form-label">Select Course *</label>
+              <label class="form-label">Course *</label>
               <select class="form-control" name="classId" required>
                 ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
               </select>
@@ -3687,6 +3008,7 @@
                 <label class="form-label">Start Time *</label>
                 <input type="time" class="form-control" name="startTime" value="09:00" required />
               </div>
+
               <div class="form-group">
                 <label class="form-label">End Time *</label>
                 <input type="time" class="form-control" name="endTime" value="10:15" required />
@@ -3694,211 +3016,91 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label">Room Number</label>
-              <input type="text" class="form-control" name="room" placeholder="e.g. 304" />
+              <label class="form-label">Room Location</label>
+              <input type="text" class="form-control" name="room" placeholder="e.g. Science 304" />
+            </div>
+
+            <div class="modal-footer" style="padding-left:0; padding-right:0; padding-bottom:0; background:none;">
+              <button type="button" class="btn-secondary" id="modal-cancel">Cancel</button>
+              <button type="submit" class="btn-primary">Add Schedule Slot</button>
             </div>
           </form>
         </div>
-
-        <div class="modal-footer">
-          <button class="btn-secondary" id="modal-cancel">Cancel</button>
-          <button class="btn-primary" id="modal-submit">Add to Schedule</button>
-        </div>
       </div>
     `;
 
-    openModalHTML(html, (dialog) => {
-      dialog.querySelector('#modal-submit').addEventListener('click', () => {
-        const form = dialog.querySelector('#form-schedule');
-        if (!form.checkValidity()) {
-          form.reportValidity();
-          return;
-        }
-        const formData = new FormData(form);
+    openModalHTML(html, dialog => {
+      dialog.querySelector('#modal-cancel')?.addEventListener('click', closeModal);
+      const form = dialog.querySelector('#form-schedule');
+      form?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
         store.addScheduleSlot({
-          classId: formData.get('classId'),
-          dayOfWeek: formData.get('dayOfWeek'),
-          startTime: formData.get('startTime'),
-          endTime: formData.get('endTime'),
-          room: formData.get('room')
+          classId: fd.get('classId'),
+          dayOfWeek: Number(fd.get('dayOfWeek')),
+          startTime: fd.get('startTime'),
+          endTime: fd.get('endTime'),
+          room: fd.get('room').trim()
         });
-        showToast('Timetable period added!', 'success');
+        showToast('Timetable slot added!', 'success');
         closeModal();
-      });
-    });
-  }
-
-  function openQuickAddModal() {
-    const html = `
-      <div class="modal-dialog" style="max-width:480px;">
-        <div class="modal-header">
-          <h2 class="modal-title">Quick Action</h2>
-          <button class="modal-close-btn" id="modal-close">✕</button>
-        </div>
-        <div class="modal-body" style="display:flex; flex-direction:column; gap:0.75rem;">
-          <button class="btn-secondary" id="quick-btn-asg" style="padding:1rem; justify-content:flex-start; font-size:1rem;">
-            📝 Add New Assignment
-          </button>
-          <button class="btn-secondary" id="quick-btn-exam" style="padding:1rem; justify-content:flex-start; font-size:1rem;">
-            🎯 Schedule an Exam
-          </button>
-          <button class="btn-secondary" id="quick-btn-class" style="padding:1rem; justify-content:flex-start; font-size:1rem;">
-            📚 Add Course / Class
-          </button>
-        </div>
-      </div>
-    `;
-
-    openModalHTML(html, (dialog) => {
-      dialog.querySelector('#quick-btn-asg').addEventListener('click', () => {
-        closeModal();
-        openAssignmentModal();
-      });
-      dialog.querySelector('#quick-btn-exam').addEventListener('click', () => {
-        closeModal();
-        openExamModal();
-      });
-      dialog.querySelector('#quick-btn-class').addEventListener('click', () => {
-        closeModal();
-        openClassModal();
       });
     });
   }
 
   function showUpcomingAlertsModal() {
-    const assignments = store.getAssignments();
-    const now = new Date();
-
-    const overdue = assignments.filter(a => a.status !== 'completed' && new Date(a.dueDate) < now);
-    const next7Days = new Date();
-    next7Days.setDate(next7Days.getDate() + 7);
-    const upcomingAsgs = assignments.filter(a => a.status !== 'completed' && new Date(a.dueDate) >= now && new Date(a.dueDate) <= next7Days);
+    const assignments = store.getAssignments().filter(a => a.status !== 'completed');
+    const exams = store.getExams();
+    const todayStr = new Date().toISOString().split('T')[0];
+    const upcomingExams = exams.filter(e => e.date >= todayStr);
 
     const html = `
       <div class="modal-dialog">
         <div class="modal-header">
-          <h2 class="modal-title">Notifications & Reminders</h2>
+          <h2 class="modal-title">Due Soon & Alerts</h2>
           <button class="modal-close-btn" id="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          ${overdue.length > 0 ? `
-            <h4 style="color:var(--danger); margin-bottom:0.5rem;">⚠️ Overdue Assignments (${overdue.length})</h4>
-            <div style="margin-bottom:1.25rem;">
-              ${overdue.map(o => `
-                <div style="padding:0.5rem 0; border-bottom:1px solid var(--border-subtle); font-size:0.875rem;">
-                  <b>${o.title}</b> • Due ${formatDateTime(o.dueDate)}
-                </div>
-              `).join('')}
-            </div>
-          ` : ''}
+          <div style="margin-bottom:1rem;">
+            <div style="font-weight:700; font-size:0.875rem; color:var(--text-primary); margin-bottom:0.5rem;">Pending Deadlines (${assignments.length})</div>
+            ${assignments.slice(0, 6).map(a => renderTaskItemHTML(a)).join('') || '<div style="color:var(--text-muted); font-size:0.8125rem;">No pending tasks.</div>'}
+          </div>
 
-          <h4 style="margin-bottom:0.5rem;">Upcoming This Week (${upcomingAsgs.length})</h4>
           <div>
-            ${upcomingAsgs.map(u => `
-              <div style="padding:0.5rem 0; border-bottom:1px solid var(--border-subtle); font-size:0.875rem;">
-                <b>${u.title}</b> • Due ${formatDateTime(u.dueDate)}
-              </div>
-            `).join('')}
-            ${upcomingAsgs.length === 0 ? `<p style="color:var(--text-muted); font-size:0.875rem;">No tasks due this week.</p>` : ''}
+            <div style="font-weight:700; font-size:0.875rem; color:var(--text-primary); margin-bottom:0.5rem;">Upcoming Exams (${upcomingExams.length})</div>
+            ${upcomingExams.slice(0, 3).map(e => renderExamCardHTML(e)).join('') || '<div style="color:var(--text-muted); font-size:0.8125rem;">No upcoming exams.</div>'}
           </div>
         </div>
       </div>
     `;
 
-    openModalHTML(html);
+    openModalHTML(html, dialog => {
+      bindTaskItemEvents(dialog);
+      bindExamCardEvents(dialog);
+    });
   }
 
-  function openModalHTML(html, bindCallback = null) {
-    state.modalContext = true;
-    elements.modalContainer.innerHTML = html;
-    elements.modalOverlay.classList.add('active');
-
-    const dialog = elements.modalContainer.querySelector('.modal-dialog');
-    const btnClose = dialog.querySelector('#modal-close');
-    const btnCancel = dialog.querySelector('#modal-cancel');
-
-    if (btnClose) btnClose.addEventListener('click', closeModal);
-    if (btnCancel) btnCancel.addEventListener('click', closeModal);
-
-    elements.modalOverlay.onclick = (e) => {
-      if (e.target === elements.modalOverlay) closeModal();
-    };
-
-    if (bindCallback) bindCallback(dialog);
+  function checkDueSoonReminders() {
+    const assignments = store.getAssignments().filter(a => a.status !== 'completed');
+    const overdue = assignments.filter(a => isOverdue(a.dueDate)).length;
+    if (elements.headerNotificationDot) {
+      elements.headerNotificationDot.style.display = overdue > 0 ? 'block' : 'none';
+    }
   }
 
-  function closeModal() {
-    state.modalContext = null;
-    elements.modalOverlay.classList.remove('active');
-    elements.modalContainer.innerHTML = '';
-  }
-
+  // Toast Notification Helper
   function showToast(message, type = 'info') {
     if (!elements.toastContainer) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    toast.innerHTML = `
-      <span>${type === 'success' ? '✓' : type === 'danger' ? '✕' : 'ℹ'}</span>
-      <span>${message}</span>
-    `;
+    toast.textContent = message;
     elements.toastContainer.appendChild(toast);
-
     setTimeout(() => {
       toast.style.opacity = '0';
-      toast.style.transform = 'translateX(100%)';
+      toast.style.transform = 'translateY(10px)';
       toast.style.transition = 'all 200ms ease';
       setTimeout(() => toast.remove(), 200);
-    }, 3200);
-  }
-
-  function checkDueSoonReminders() {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
-    }
-  }
-
-  // --- UTILITIES ---
-  function getPriorityBadgeClass(p) {
-    if (p === 'high') return 'danger';
-    if (p === 'medium') return 'warning';
-    return 'info';
-  }
-
-  function getDayName(dayNum) {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[dayNum] || 'Monday';
-  }
-
-  function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const d = new Date(dateStr + (dateStr.includes('T') ? '' : 'T00:00:00'));
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
-  function formatDateTime(dateStr) {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  }
-
-  function isSameDay(d1, d2) {
-    return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
-  }
-
-  function getDaysDiff(d1, d2) {
-    const oneDay = 24 * 60 * 60 * 1000;
-    return Math.round((d2 - d1) / oneDay);
-  }
-
-  function getRelativeInputDate(daysOffset) {
-    const d = new Date();
-    d.setDate(d.getDate() + daysOffset);
-    d.setHours(23, 59, 0, 0);
-    return d.toISOString().slice(0, 16);
+    }, 2800);
   }
 
   function downloadFile(content, fileName, contentType) {
@@ -3923,7 +3125,7 @@
     });
   }
 
-  // Self-executing initialization on DOM ready
+  // Execution Bootstrapper
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
   } else {

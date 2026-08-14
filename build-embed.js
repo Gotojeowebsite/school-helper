@@ -2,7 +2,7 @@
  * AcademiaPro - Google Sites Single-File Embed Bundler
  * 
  * Bundles index.html, css/style.css, and js/app.js into a self-contained
- * single HTML file (`academia_pro_embed.html`) optimized for Google Sites iframe embedding.
+ * single HTML file (academia_pro_embed.html) optimized for Google Sites iframe embedding.
  */
 
 const fs = require('fs');
@@ -17,7 +17,6 @@ const OUTPUT_PATH = path.join(ROOT_DIR, 'academia_pro_embed.html');
 function buildEmbed() {
   console.log('🚀 Starting AcademiaPro embed build...');
 
-  // 1. Verify and read source files
   if (!fs.existsSync(HTML_PATH)) {
     throw new Error(`Missing HTML file at ${HTML_PATH}`);
   }
@@ -38,11 +37,11 @@ function buildEmbed() {
 
   let bundledHtml = htmlContent;
 
-  // 2. Remove any references to data.js if present
+  // 1. Remove any references to data.js if present
   const dataScriptRegex = /<script\b[^>]*\bsrc=["'][^"']*data\.js["'][^>]*>\s*<\/script>\s*/gi;
   bundledHtml = bundledHtml.replace(dataScriptRegex, '');
 
-  // 3. Inline CSS stylesheet into <style> block
+  // 2. Inline CSS stylesheet into <style> block
   const cssLinkRegex = /<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["'][^"']*style\.css["'][^>]*\s*\/?>|<link\b[^>]*\bhref=["'][^"']*style\.css["'][^>]*\brel=["']stylesheet["'][^>]*\s*\/?>/i;
   
   if (!cssLinkRegex.test(bundledHtml)) {
@@ -53,7 +52,7 @@ function buildEmbed() {
     bundledHtml = bundledHtml.replace(cssLinkRegex, inlineStyle);
   }
 
-  // 4. Inline JS application script into <script> block
+  // 3. Inline JS application script into <script> block
   const appScriptRegex = /<script\b[^>]*\bsrc=["'][^"']*app\.js["'][^>]*>\s*<\/script>/i;
 
   if (!appScriptRegex.test(bundledHtml)) {
@@ -64,7 +63,7 @@ function buildEmbed() {
     bundledHtml = bundledHtml.replace(appScriptRegex, inlineScript);
   }
 
-  // 5. Write output file
+  // 4. Write output file
   fs.writeFileSync(OUTPUT_PATH, bundledHtml, 'utf8');
 
   const outputStats = fs.statSync(OUTPUT_PATH);
