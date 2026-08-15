@@ -83,13 +83,15 @@ class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, W
         
         // Set initial theme
         let isDark = traitCollection.userInterfaceStyle == .dark
-        webView.evaluateJavaScript("document.documentElement.setAttribute('data-theme', '\\(isDark ? "dark" : "light")')")
+        let theme = isDark ? "dark" : "light"
+        webView.evaluateJavaScript("document.documentElement.setAttribute('data-theme', '\(theme)')")
     }
     
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         let isDark = traitCollection.userInterfaceStyle == .dark
-        webView.evaluateJavaScript("document.documentElement.setAttribute('data-theme', '\\(isDark ? "dark" : "light")')")
+        let theme = isDark ? "dark" : "light"
+        webView.evaluateJavaScript("document.documentElement.setAttribute('data-theme', '\(theme)')")
     }
     
     override var preferredStatusBarStyle: UIStatusBarStyle {
