@@ -551,10 +551,150 @@ a {
   pointer-events: none;
 }
 
+/* Live Search Dropdown */
+.search-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  max-height: 380px;
+  overflow-y: auto;
+  z-index: 100;
+  padding: 0.375rem;
+}
+
+.search-dropdown-section {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.375rem 0.5rem 0.125rem;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  text-decoration: none;
+  color: var(--text-primary);
+}
+
+.search-result-item:hover,
+.search-result-item.selected {
+  background: var(--bg-surface-hover);
+}
+
+.search-result-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.search-result-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-result-sub {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+
+.search-result-badge {
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-xs);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.search-empty-state {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
 .header-right {
   display: flex;
   align-items: center;
   gap: 0.625rem;
+}
+
+/* Header Streak Button */
+.streak-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.3125rem 0.625rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.streak-header-btn:hover {
+  background: var(--warning-light);
+  border-color: var(--warning-border);
+  transform: translateY(-1px);
+}
+
+.streak-flame-icon {
+  font-size: 1rem;
+  display: inline-block;
+  animation: flame-pulse 2s infinite ease-in-out;
+}
+
+@keyframes flame-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.6)); }
+}
+
+.streak-count {
+  font-family: var(--font-mono);
+  color: var(--warning-text);
+  font-weight: 800;
+}
+
+/* Sidebar Backdrop */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 95;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+  pointer-events: none;
+}
+
+.sidebar-backdrop.active {
+  display: block;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .icon-btn {
@@ -2207,21 +2347,93 @@ textarea.form-control {
 }
 
 
-/* Pomodoro Styles */
+/* ==========================================================================
+   Focus Timer & Pomodoro Engine Styles
+   ========================================================================== */
+
+.focus-timer-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.5rem 1.5rem;
+  background: var(--bg-surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.focus-presets-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.focus-preset-pill {
+  padding: 0.375rem 0.875rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.focus-preset-pill:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.focus-preset-pill.active {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .pomodoro-timer-ring {
-  width: 280px;
-  height: 280px;
+  width: 290px;
+  height: 290px;
+  max-width: 80vw;
+  max-height: 80vw;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  transition: background 0.5s linear;
+  transition: background 0.4s ease-out, box-shadow 0.4s ease;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+}
+
+.pomodoro-timer-ring.active-pulse {
+  animation: timer-glow 3s infinite ease-in-out;
+}
+
+@keyframes timer-glow {
+  0%, 100% { box-shadow: 0 0 15px rgba(79, 70, 229, 0.2); }
+  50% { box-shadow: 0 0 35px rgba(79, 70, 229, 0.45); }
+}
+
+[data-theme="dark"] .pomodoro-timer-ring.active-pulse {
+  animation: timer-glow-dark 3s infinite ease-in-out;
+}
+
+@keyframes timer-glow-dark {
+  0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+  50% { box-shadow: 0 0 45px rgba(99, 102, 241, 0.6); }
 }
 
 .pomodoro-timer-inner {
-  width: 250px;
-  height: 250px;
+  width: 260px;
+  height: 260px;
+  max-width: calc(80vw - 30px);
+  max-height: calc(80vw - 30px);
   border-radius: 50%;
   background: var(--bg-surface);
   display: flex;
@@ -2229,53 +2441,336 @@ textarea.form-control {
   align-items: center;
   justify-content: center;
   z-index: 1;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.pomodoro-phase {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
 }
 
 .pomodoro-time {
-  font-size: 4rem;
+  font-size: 4.25rem;
   font-weight: 800;
   font-family: var(--font-mono);
   color: var(--text-primary);
   line-height: 1;
-  margin: 0.5rem 0;
-}
-
-.pomodoro-phase {
-  font-size: 1rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--accent);
+  margin: 0.25rem 0;
+  letter-spacing: -0.04em;
 }
 
 .pomodoro-counter {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.pomodoro-course-tag {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.pomodoro-controls {
+  margin-top: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.pomodoro-control-btn {
+  min-width: 110px;
+  height: 42px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+/* ==========================================================================
+   Gamification, XP, Streaks & Achievements Styles
+   ========================================================================== */
+
+.streak-hero-card {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(239, 68, 68, 0.04) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-xl);
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.streak-metrics-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.streak-metric-val {
+  font-size: 2.75rem;
+  font-weight: 900;
+  line-height: 1;
+  font-family: var(--font-mono);
+  letter-spacing: -0.03em;
+}
+
+.streak-metric-label {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+.xp-progress-wrapper {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+}
+
+.xp-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.xp-level-title {
+  font-weight: 800;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.xp-points-text {
+  font-size: 0.8125rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
   color: var(--text-secondary);
 }
 
-/* Heatmap Styles */
-.heatmap-cell {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
+.xp-progress-bar {
+  height: 10px;
   background: var(--bg-surface-active);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
 }
+
+.xp-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4f46e5 0%, #3b82f6 50%, #10b981 100%);
+  border-radius: var(--radius-full);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Activity Heatmap Grid */
+.streak-heatmap-container {
+  overflow-x: auto;
+  padding: 0.75rem 0;
+}
+
+.streak-heatmap {
+  display: grid;
+  grid-template-rows: repeat(7, 13px);
+  grid-auto-flow: column;
+  grid-auto-columns: 13px;
+  gap: 4px;
+  min-width: 600px;
+}
+
+.heatmap-cell {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  background: var(--bg-surface-active);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  cursor: pointer;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.3);
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.heatmap-cell.intensity-0 { background: var(--bg-surface-active); }
 .heatmap-cell.intensity-1 { background: #9be9a8; }
 .heatmap-cell.intensity-2 { background: #40c463; }
 .heatmap-cell.intensity-3 { background: #30a14e; }
 .heatmap-cell.intensity-4 { background: #216e39; }
 
+[data-theme="dark"] .heatmap-cell.intensity-0 { background: #1e293b; }
 [data-theme="dark"] .heatmap-cell.intensity-1 { background: #0e4429; }
 [data-theme="dark"] .heatmap-cell.intensity-2 { background: #006d32; }
 [data-theme="dark"] .heatmap-cell.intensity-3 { background: #26a641; }
 [data-theme="dark"] .heatmap-cell.intensity-4 { background: #39d353; }
+
+/* Achievement Badges Grid */
+.achievements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.875rem;
+}
+
+.achievement-card {
+  padding: 1.125rem 0.75rem;
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  text-align: center;
+  transition: all var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.achievement-card.unlocked {
+  background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface-subtle) 100%);
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.08);
+}
+
+.achievement-card.locked {
+  opacity: 0.45;
+  filter: grayscale(1);
+  background: var(--bg-surface-subtle);
+}
+
+.achievement-icon {
+  font-size: 2.25rem;
+  margin-bottom: 0.375rem;
+  line-height: 1;
+}
+
+.achievement-title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.125rem;
+}
+
+.achievement-desc {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+
+.achievement-badge-pill {
+  margin-top: 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+/* Timetable active slot badge */
+.timetable-class-block.ongoing {
+  box-shadow: 0 0 0 2px var(--accent), 0 4px 12px rgba(79, 70, 229, 0.35);
+  position: relative;
+}
+
+.timetable-class-block.ongoing::after {
+  content: 'LIVE';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 0.5625rem;
+  font-weight: 800;
+  padding: 1px 4px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 3px;
+}
+
+/* PowerSchool GPA Preview & Course Level Badges */
+.ps-gpa-summary-card {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%);
+  border: 1px solid rgba(79, 70, 229, 0.25);
+  border-radius: var(--radius-lg);
+  padding: 1.125rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.ps-level-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.ps-level-badge.ap {
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.ps-level-badge.preap {
+  background: rgba(14, 165, 233, 0.15);
+  color: #0284c7;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.ps-level-badge.honors {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.ps-level-badge.regular {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--text-secondary);
+  border: 1px solid rgba(100, 116, 139, 0.25);
+}
+
+.ps-level-select {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+}
+
+.ps-level-select:focus {
+  border-color: var(--accent);
+}
+
 
   </style>
 </head>
 <body>
   <div id="app-container">
     <!-- Desktop & Tablet Sidebar -->
-    <aside class="app-sidebar">
+    <aside class="app-sidebar" id="app-sidebar">
       <div class="sidebar-header">
         <div class="brand-logo">
           <div class="brand-icon">
@@ -2354,7 +2849,7 @@ textarea.form-control {
           <span>Classes Directory</span>
         </a>
 
-        <div class="nav-section-title">Tools & Preferences</div>
+        <div class="nav-section-title">Tools & Performance</div>
         <a href="#focus" class="nav-item" data-nav-target="focus">
           <span class="nav-item-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -2366,20 +2861,20 @@ textarea.form-control {
           <span class="nav-item-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
           </span>
-          <span>Analytics</span>
+          <span>Analytics & Streaks</span>
         </a>
 
         <a href="#settings" class="nav-item" data-nav-target="settings">
           <span class="nav-item-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           </span>
-          <span>Settings</span>
+          <span>Settings & Sync</span>
         </a>
       </nav>
 
       <!-- Sidebar User Profile Footer -->
       <div class="sidebar-footer">
-        <div class="sidebar-user" id="sidebar-user-card" style="cursor:pointer;" title="Click to manage Local Account">
+        <div class="sidebar-user" id="sidebar-user-card" style="cursor:pointer;" title="Click to manage Local / Cloud Account">
           <div class="user-avatar" id="user-avatar-display">ST</div>
           <div class="user-info">
             <span class="user-name" id="user-name-display">Student</span>
@@ -2394,6 +2889,9 @@ textarea.form-control {
       </div>
     </aside>
 
+    <!-- Mobile Sidebar Backdrop -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
     <!-- Main Content Stage -->
     <main class="app-main">
       <!-- Global Sticky Header -->
@@ -2403,16 +2901,25 @@ textarea.form-control {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
           </button>
 
-          <div class="global-search-wrapper">
+          <div class="global-search-wrapper" id="global-search-wrapper">
             <span class="search-icon">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             </span>
-            <input type="text" class="global-search-input" id="global-search-input" placeholder="Search tasks, exams, classes..." />
+            <input type="text" class="global-search-input" id="global-search-input" placeholder="Search tasks, exams, classes..." autocomplete="off" />
             <span class="search-shortcut-badge">/</span>
+
+            <!-- Live Search Dropdown -->
+            <div class="search-dropdown-menu" id="search-dropdown-menu" style="display:none;"></div>
           </div>
         </div>
 
         <div class="header-right">
+          <!-- Streak Badge -->
+          <button class="streak-header-btn" id="header-streak-btn" title="View Study Streak & XP (Click to open Analytics)">
+            <span class="streak-flame-icon">🔥</span>
+            <span class="streak-count" id="header-streak-count">0</span>
+          </button>
+
           <!-- Notification Bell -->
           <button class="icon-btn" id="notification-btn" title="View Due Reminders & Overdue Alerts">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
@@ -2425,7 +2932,7 @@ textarea.form-control {
           </button>
 
           <!-- Account Button -->
-          <button class="icon-btn" id="header-auth-btn" title="Manage Account">
+          <button class="icon-btn" id="header-auth-btn" title="Manage Account & Sync">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
           </button>
 
@@ -2471,7 +2978,7 @@ textarea.form-control {
       </div>
     </main>
 
-    <!-- Mobile Bottom Navigation Bar (Optimized for embedded iframe views) -->
+    <!-- Mobile Bottom Navigation Bar (Optimized for touch & iOS) -->
     <nav class="mobile-bottom-nav">
       <button class="mobile-nav-btn active" data-nav-target="dashboard">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
@@ -2485,9 +2992,9 @@ textarea.form-control {
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3" ry="3"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
         <span>Calendar</span>
       </button>
-      <button class="mobile-nav-btn" data-nav-target="exams">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-        <span>Exams</span>
+      <button class="mobile-nav-btn" data-nav-target="focus">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span>Focus</span>
       </button>
       <button class="mobile-nav-btn" data-nav-target="grades">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
@@ -3371,6 +3878,12 @@ textarea.form-control {
         if (asg.subtasks && asg.subtasks.length > 0) {
           asg.subtasks.forEach(st => st.isCompleted = !isComplete);
         }
+        if (!isComplete) {
+          updateDailyStreak('task');
+          triggerHaptic('success');
+        } else {
+          triggerHaptic('light');
+        }
         this.notify('assignment_toggled', asg);
       }
     }
@@ -3561,40 +4074,155 @@ textarea.form-control {
 
       const finalScore = totalWeightUsed > 0 ? (weightedSum / (totalWeightUsed / 100)) : null;
       const letter = this.percentageToLetter(finalScore);
-      const gpaPoints = this.letterToGpaPoints(letter);
+      const unweightedGpaPoints = this.letterToGpaPoints(letter);
+      const courseLevel = cls.courseLevel || this.detectCourseLevel(cls.name);
+      const boost = this.getLevelWeightBoost(courseLevel);
+      const weightedGpaPoints = unweightedGpaPoints > 0 ? Math.min(5.0, unweightedGpaPoints + boost) : 0;
 
       return {
         score: finalScore !== null ? Math.round(finalScore * 10) / 10 : null,
         letter,
-        gpaPoints,
+        gpaPoints: unweightedGpaPoints,
+        unweightedGpaPoints,
+        weightedGpaPoints,
+        courseLevel,
         categories,
         totalWeightUsed
       };
     }
 
+    getRememberedCourseLevel(courseName) {
+      if (!courseName) return null;
+      const key = String(courseName).trim().toLowerCase();
+      
+      // 1. Check persistent memory map in settings
+      const memory = this.data.settings?.courseLevelMemory || {};
+      if (memory[key]) return memory[key];
+
+      // 2. Check if an existing class has this name and a configured courseLevel
+      const existingClasses = this.getClasses();
+      const directMatch = existingClasses.find(c => c.name && c.name.trim().toLowerCase() === key);
+      if (directMatch && directMatch.courseLevel) {
+        return directMatch.courseLevel;
+      }
+
+      return null;
+    }
+
+    rememberCourseLevel(courseName, level) {
+      if (!courseName || !level) return;
+      const key = String(courseName).trim().toLowerCase();
+      const curMemory = (this.data.settings && this.data.settings.courseLevelMemory) || {};
+      const updatedMemory = { ...curMemory, [key]: level };
+      this.updateSettings({ courseLevelMemory: updatedMemory });
+    }
+
+    detectCourseLevel(courseName) {
+      if (!courseName) return 'Regular';
+
+      // 1. Check user choice memory first (saves time on grade updates)
+      const remembered = this.getRememberedCourseLevel(courseName);
+      if (remembered) return remembered;
+
+      // 2. Smart auto-detection from course title
+      const n = courseName.toUpperCase();
+      // Check Pre-AP / PAP / PreAP / Pre AP / Pre-A.P. -> 5.0 scale
+      if (/\b(PRE[-\s]?A\.?P\.?|PAP|PREAP)\b/i.test(n) || /\bPRE[-\s]?AP\b/i.test(n)) {
+        return 'Pre-AP';
+      }
+      // Check AP / A.P. / Adv Pl / Advanced Placement / IB / Dual Credit / DC -> 5.0 scale
+      if (/\b(AP|A\.?P\.?|ADV\s*PL|ADVANCED\s*PLACEMENT|IB|HL|SL|DUAL\s*CREDIT|DC|COLLEGE)\b/i.test(n)) {
+        return 'AP';
+      }
+      // Everything else is standard 4.0 scale
+      return 'Regular';
+    }
+
+    getLevelWeightBoost(level) {
+      if (!level) return 0.0;
+      const l = String(level).toUpperCase();
+      // AP and Pre-AP (along with IB / Dual Credit) are 5.0 scale (+1.0 boost)
+      if (l.includes('PRE-AP') || l.includes('PREAP') || l.includes('PAP') || l.includes('AP') || l.includes('IB') || l.includes('DUAL') || l.includes('COLLEGE') || l.includes('WEIGHTED') || l.includes('5.0')) {
+        return 1.0;
+      }
+      return 0.0;
+    }
+
     calculateOverallGPA() {
       const classes = this.getClasses();
-      if (classes.length === 0) return { gpa: null, totalCredits: 0, gradedCount: 0 };
+      if (classes.length === 0) {
+        return { 
+          gpa: null, 
+          unweightedGpa: null, 
+          weightedGpa: null, 
+          totalCredits: 0, 
+          gradedCount: 0, 
+          weightedCount: 0,
+          apCount: 0,
+          preApCount: 0,
+          regularCount: 0,
+          details: [] 
+        };
+      }
 
-      let totalPoints = 0;
+      let totalUnweightedPoints = 0;
+      let totalWeightedPoints = 0;
       let totalCredits = 0;
       let gradedCount = 0;
+      let apCount = 0;
+      let preApCount = 0;
+      let weightedCount = 0;
+      let regularCount = 0;
+      const details = [];
 
       classes.forEach(c => {
         const grade = this.calculateClassGrade(c.id);
         if (grade.score !== null) {
           const credits = c.credits || 3;
-          totalPoints += (grade.gpaPoints * credits);
+          totalUnweightedPoints += (grade.unweightedGpaPoints * credits);
+          totalWeightedPoints += (grade.weightedGpaPoints * credits);
           totalCredits += credits;
           gradedCount++;
+
+          const levelBoost = this.getLevelWeightBoost(grade.courseLevel);
+          if (levelBoost > 0) {
+            weightedCount++;
+            if (String(grade.courseLevel).toUpperCase().includes('PRE')) {
+              preApCount++;
+            } else {
+              apCount++;
+            }
+          } else {
+            regularCount++;
+          }
+
+          details.push({
+            id: c.id,
+            name: c.name,
+            score: grade.score,
+            letter: grade.letter,
+            courseLevel: grade.courseLevel,
+            credits,
+            unweightedPoints: grade.unweightedGpaPoints,
+            weightedPoints: grade.weightedGpaPoints
+          });
         }
       });
 
-      const gpa = totalCredits > 0 ? (totalPoints / totalCredits) : null;
+      const unweightedGpa = totalCredits > 0 ? (totalUnweightedPoints / totalCredits) : null;
+      const weightedGpa = totalCredits > 0 ? (totalWeightedPoints / totalCredits) : null;
+
       return {
-        gpa: gpa !== null ? Math.round(gpa * 100) / 100 : null,
+        gpa: unweightedGpa !== null ? Math.round(unweightedGpa * 100) / 100 : null,
+        unweightedGpa: unweightedGpa !== null ? Math.round(unweightedGpa * 100) / 100 : null,
+        weightedGpa: weightedGpa !== null ? Math.round(weightedGpa * 100) / 100 : null,
         totalCredits,
-        gradedCount
+        gradedCount,
+        weightedCount,
+        apCount,
+        preApCount,
+        regularCount,
+        details
       };
     }
 
@@ -3740,6 +4368,424 @@ textarea.form-control {
 
   let elements = {};
 
+  // --- WEB AUDIO API COMPLETION CHIME SYNTHESIZER (100% Offline) ---
+  function playCompletionChime() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6 (crystal bell chime)
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.12);
+        gain.gain.setValueAtTime(0, ctx.currentTime + idx * 0.12);
+        gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + idx * 0.12 + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.12 + 0.55);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + idx * 0.12);
+        osc.stop(ctx.currentTime + idx * 0.12 + 0.6);
+      });
+    } catch (e) {
+      console.warn('Audio chime playback warning:', e);
+    }
+  }
+
+  // --- NATIVE IOS WRAPPER BRIDGES ---
+  function triggerHaptic(type = 'light') {
+    if (window.AcademiaProNative && typeof window.AcademiaProNative.haptic === 'function') {
+      try {
+        window.AcademiaProNative.haptic(type);
+      } catch (e) {}
+    }
+  }
+
+  function scheduleNativeNotification(id, title, body, dateOrTimestamp, category = 'academic') {
+    if (window.AcademiaProNative && typeof window.AcademiaProNative.scheduleNotification === 'function') {
+      try {
+        let timestampSec;
+        if (typeof dateOrTimestamp === 'number') {
+          timestampSec = (dateOrTimestamp > 1e11) ? dateOrTimestamp / 1000 : dateOrTimestamp;
+        } else {
+          timestampSec = new Date(dateOrTimestamp).getTime() / 1000;
+        }
+        window.AcademiaProNative.scheduleNotification(
+          String(id || ('notif-' + Date.now())),
+          String(title || 'AcademiaPro Reminder'),
+          String(body || ''),
+          timestampSec,
+          String(category)
+        );
+      } catch (e) {
+        console.warn('Native notification scheduling warning:', e);
+      }
+    }
+  }
+
+  function cancelNativeNotification(id) {
+    if (window.AcademiaProNative && typeof window.AcademiaProNative.cancelNotification === 'function') {
+      try {
+        window.AcademiaProNative.cancelNotification(String(id));
+      } catch (e) {}
+    }
+  }
+
+  // --- GAMIFICATION & STREAKS ENGINE ---
+  function getLevelTitle(lvl) {
+    if (lvl >= 10) return 'Academic Grandmaster 🎓';
+    if (lvl >= 7) return 'Master Polymath 👑';
+    if (lvl >= 5) return "Dean's Honor Scholar 🌟";
+    if (lvl >= 4) return 'Diligent Academic ⚡';
+    if (lvl >= 3) return 'Focused Scholar 🔥';
+    if (lvl >= 2) return 'Academic Apprentice 📚';
+    return 'Novice Scholar 🚀';
+  }
+
+  function updateDailyStreak(type = 'task') {
+    const data = store.getState();
+    if (!data.streaks) {
+      data.streaks = { currentStreak: 0, longestStreak: 0, lastActiveDate: null, totalXP: 0, level: 1, achievements: [], dailyLog: {} };
+    }
+    const today = new Date().toISOString().split('T')[0];
+    if (!data.streaks.dailyLog) data.streaks.dailyLog = {};
+    if (!data.streaks.dailyLog[today]) {
+      data.streaks.dailyLog[today] = { tasksCompleted: 0, focusMinutes: 0, xpEarned: 0 };
+      
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      if (data.streaks.lastActiveDate === yesterday) {
+        data.streaks.currentStreak = (data.streaks.currentStreak || 0) + 1;
+        if (data.streaks.currentStreak > (data.streaks.longestStreak || 0)) {
+          data.streaks.longestStreak = data.streaks.currentStreak;
+        }
+      } else if (data.streaks.lastActiveDate !== today) {
+        data.streaks.currentStreak = 1;
+      }
+      data.streaks.lastActiveDate = today;
+    }
+
+    let xpGain = 0;
+    if (type === 'task') {
+      data.streaks.dailyLog[today].tasksCompleted = (data.streaks.dailyLog[today].tasksCompleted || 0) + 1;
+      xpGain = 15;
+    } else if (type === 'pomodoro') {
+      const focusMin = store.getState().pomodoro?.settings?.workDuration || 25;
+      data.streaks.dailyLog[today].focusMinutes = (data.streaks.dailyLog[today].focusMinutes || 0) + focusMin;
+      xpGain = 25;
+    } else if (type === 'exam_prep') {
+      xpGain = 20;
+    }
+
+    data.streaks.dailyLog[today].xpEarned = (data.streaks.dailyLog[today].xpEarned || 0) + xpGain;
+    data.streaks.totalXP = (data.streaks.totalXP || 0) + xpGain;
+
+    const oldLevel = data.streaks.level || 1;
+    const newLevel = Math.floor(data.streaks.totalXP / 500) + 1;
+    if (newLevel > oldLevel) {
+      data.streaks.level = newLevel;
+      showToast(`Level Up! You are now Level ${newLevel} (${getLevelTitle(newLevel)}) 🎉`, 'success');
+      triggerHaptic('success');
+    }
+
+    checkAchievements();
+    updateBadges();
+    store.notify('streak_update', { streak: data.streaks.currentStreak, xp: data.streaks.totalXP });
+  }
+
+  function checkAchievements() {
+    const data = store.getState();
+    if (!data.streaks) return;
+    if (!Array.isArray(data.streaks.achievements)) data.streaks.achievements = [];
+    const a = data.streaks.achievements;
+    const today = new Date().toISOString().split('T')[0];
+    const log = data.streaks.dailyLog?.[today] || { tasksCompleted: 0, focusMinutes: 0 };
+
+    const unlock = (id, title, desc) => {
+      if (!a.includes(id)) {
+        a.push(id);
+        showToast(`🏆 Achievement Unlocked: ${title}!`, 'success');
+        triggerHaptic('success');
+        playCompletionChime();
+      }
+    };
+
+    if ((data.streaks.totalXP || 0) > 0) unlock('first_task', 'Getting Started', 'Earned your first XP points');
+    if ((data.streaks.currentStreak || 0) >= 3) unlock('streak_3', 'On a Roll', 'Achieved a 3-day study streak');
+    if ((data.streaks.currentStreak || 0) >= 7) unlock('streak_7', 'Weekly Warrior', 'Achieved a 7-day study streak');
+    if ((data.streaks.currentStreak || 0) >= 30) unlock('streak_30', 'Monthly Master', 'Achieved a 30-day study streak');
+    if ((data.pomodoro?.totalFocusMinutes || 0) >= 60 || (log.focusMinutes || 0) >= 60) unlock('focus_60', 'Deep Focus', 'Logged 60+ minutes of focused study');
+    
+    let totalTasks = 0;
+    for (const d in data.streaks.dailyLog || {}) {
+      totalTasks += (data.streaks.dailyLog[d].tasksCompleted || 0);
+    }
+    if (totalTasks >= 5) unlock('tasks_5', 'Task Crusher', 'Completed 5 academic assignments');
+    if (totalTasks >= 25) unlock('tasks_25', 'Academic Engine', 'Completed 25 academic assignments');
+    if ((data.classes || []).length >= 4) unlock('full_schedule', 'Full Schedule', 'Enrolled in 4+ academic courses');
+  }
+
+  // --- POMODORO TIMER ENGINE ---
+  function startPomodoro() {
+    if (state.pomodoroTimer.isRunning) return;
+    state.pomodoroTimer.isRunning = true;
+    state.pomodoroTimer.isPaused = false;
+    clearInterval(state.pomodoroTimer.intervalId);
+    state.pomodoroTimer.intervalId = setInterval(tickPomodoro, 1000);
+    triggerHaptic('light');
+    if (state.currentView === 'focus') renderFocusTimerView();
+  }
+
+  function pausePomodoro() {
+    if (!state.pomodoroTimer.isRunning) return;
+    clearInterval(state.pomodoroTimer.intervalId);
+    state.pomodoroTimer.isRunning = false;
+    state.pomodoroTimer.isPaused = true;
+    triggerHaptic('light');
+    if (state.currentView === 'focus') renderFocusTimerView();
+  }
+
+  function resetPomodoro() {
+    clearInterval(state.pomodoroTimer.intervalId);
+    const data = store.getState();
+    const settings = data.pomodoro?.settings || { workDuration: 25, shortBreak: 5, longBreak: 15, sessionsBeforeLong: 4 };
+    state.pomodoroTimer.isRunning = false;
+    state.pomodoroTimer.isPaused = false;
+    state.pomodoroTimer.currentPhase = 'work';
+    state.pomodoroTimer.timeRemaining = settings.workDuration * 60;
+    triggerHaptic('light');
+    if (state.currentView === 'focus') renderFocusTimerView();
+  }
+
+  function selectPomodoroPreset(minutes, phase = 'work') {
+    clearInterval(state.pomodoroTimer.intervalId);
+    state.pomodoroTimer.isRunning = false;
+    state.pomodoroTimer.isPaused = false;
+    state.pomodoroTimer.currentPhase = phase;
+    state.pomodoroTimer.timeRemaining = minutes * 60;
+    triggerHaptic('selection');
+    if (state.currentView === 'focus') renderFocusTimerView();
+  }
+
+  function tickPomodoro() {
+    if (state.pomodoroTimer.timeRemaining > 0) {
+      state.pomodoroTimer.timeRemaining--;
+      if (state.currentView === 'focus') {
+        const timeDisplay = document.getElementById('pomodoro-time-display');
+        if (timeDisplay) {
+          const mins = Math.floor(state.pomodoroTimer.timeRemaining / 60);
+          const secs = state.pomodoroTimer.timeRemaining % 60;
+          timeDisplay.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+          
+          const data = store.getState();
+          const settings = data.pomodoro?.settings || { workDuration: 25, shortBreak: 5, longBreak: 15, sessionsBeforeLong: 4 };
+          let total = settings.workDuration * 60;
+          if (state.pomodoroTimer.currentPhase === 'shortBreak') total = settings.shortBreak * 60;
+          if (state.pomodoroTimer.currentPhase === 'longBreak') total = settings.longBreak * 60;
+          
+          const progress = Math.max(0, Math.min(100, ((total - state.pomodoroTimer.timeRemaining) / total) * 100));
+          const ring = document.getElementById('pomodoro-ring');
+          if (ring) {
+            ring.style.background = `conic-gradient(var(--accent) ${progress}%, var(--bg-surface-active) ${progress}%)`;
+            if (state.pomodoroTimer.isRunning) {
+              ring.classList.add('active-pulse');
+            } else {
+              ring.classList.remove('active-pulse');
+            }
+          }
+        }
+      }
+    } else {
+      completePomodoroPhase();
+    }
+  }
+
+  function completePomodoroPhase() {
+    clearInterval(state.pomodoroTimer.intervalId);
+    const data = store.getState();
+    if (!data.pomodoro) data.pomodoro = { sessions: [], settings: { workDuration: 25, shortBreak: 5, longBreak: 15, sessionsBeforeLong: 4 }, totalFocusMinutes: 0, todayFocusMinutes: 0 };
+    const settings = data.pomodoro.settings || { workDuration: 25, shortBreak: 5, longBreak: 15, sessionsBeforeLong: 4 };
+    
+    if (state.pomodoroTimer.currentPhase === 'work') {
+      state.pomodoroTimer.sessionsCompleted++;
+      const duration = settings.workDuration;
+      data.pomodoro.totalFocusMinutes = (data.pomodoro.totalFocusMinutes || 0) + duration;
+      data.pomodoro.todayFocusMinutes = (data.pomodoro.todayFocusMinutes || 0) + duration;
+      
+      data.pomodoro.sessions.push({
+        id: 'pom-' + Date.now(),
+        startTime: new Date(Date.now() - duration * 60000).toISOString(),
+        endTime: new Date().toISOString(),
+        duration: duration,
+        classId: state.pomodoroTimer.linkedClassId || null,
+        type: 'work',
+        completed: true
+      });
+      
+      updateDailyStreak('pomodoro');
+      playCompletionChime();
+      triggerHaptic('success');
+      showToast('Focus session complete! Take a break 🎉', 'success');
+
+      scheduleNativeNotification(
+        'pom-break-done',
+        'Break Finished',
+        'Ready to jump into your next focus session?',
+        Date.now() + (settings.shortBreak * 60 * 1000),
+        'focus'
+      );
+      
+      if (state.pomodoroTimer.sessionsCompleted % settings.sessionsBeforeLong === 0) {
+        state.pomodoroTimer.currentPhase = 'longBreak';
+        state.pomodoroTimer.timeRemaining = settings.longBreak * 60;
+      } else {
+        state.pomodoroTimer.currentPhase = 'shortBreak';
+        state.pomodoroTimer.timeRemaining = settings.shortBreak * 60;
+      }
+    } else {
+      playCompletionChime();
+      triggerHaptic('light');
+      showToast('Break finished! Ready for your next study block 🚀', 'info');
+      state.pomodoroTimer.currentPhase = 'work';
+      state.pomodoroTimer.timeRemaining = settings.workDuration * 60;
+    }
+    
+    state.pomodoroTimer.isRunning = false;
+    state.pomodoroTimer.isPaused = false;
+    store.notify('pomodoro_update');
+    if (state.currentView === 'focus') renderFocusTimerView();
+  }
+
+  function handleGlobalSearchInput(query) {
+    state.searchQuery = query.trim().toLowerCase();
+    const dropdown = document.getElementById('search-dropdown-menu');
+    if (!dropdown) return;
+
+    if (!state.searchQuery) {
+      dropdown.style.display = 'none';
+      dropdown.innerHTML = '';
+      if (state.currentView === 'assignments') renderAssignmentsView();
+      else if (state.currentView === 'dashboard') renderDashboardView();
+      else if (state.currentView === 'exams') renderExamsView();
+      return;
+    }
+
+    const assignments = store.getAssignments().filter(a => 
+      a.title.toLowerCase().includes(state.searchQuery) ||
+      (a.description && a.description.toLowerCase().includes(state.searchQuery))
+    );
+
+    const exams = store.getExams().filter(e => 
+      e.title.toLowerCase().includes(state.searchQuery) ||
+      (e.description && e.description.toLowerCase().includes(state.searchQuery)) ||
+      (e.topics && e.topics.some(t => t.toLowerCase().includes(state.searchQuery)))
+    );
+
+    const classes = store.getClasses().filter(c => 
+      c.name.toLowerCase().includes(state.searchQuery) ||
+      (c.code && c.code.toLowerCase().includes(state.searchQuery)) ||
+      (c.teacher && c.teacher.toLowerCase().includes(state.searchQuery))
+    );
+
+    const totalMatches = assignments.length + exams.length + classes.length;
+
+    if (totalMatches === 0) {
+      dropdown.innerHTML = `<div class="search-empty-state">No matching tasks, exams, or courses found.</div>`;
+      dropdown.style.display = 'block';
+      return;
+    }
+
+    let html = '';
+    if (assignments.length > 0) {
+      html += `<div class="search-dropdown-section">Assignments (${assignments.length})</div>`;
+      assignments.slice(0, 4).forEach(a => {
+        const cls = store.getClassById(a.classId);
+        html += `
+          <div class="search-result-item" data-type="task" data-id="${a.id}">
+            <div class="search-result-main">
+              <span style="font-size:1rem;">📋</span>
+              <div>
+                <div class="search-result-title">${escapeHTML(a.title)}</div>
+                <div class="search-result-sub">${cls ? escapeHTML(cls.name) + ' · ' : ''}${formatRelativeDueDate(a.dueDate)}</div>
+              </div>
+            </div>
+            <span class="search-result-badge badge ${a.status === 'completed' ? 'success' : 'neutral'}">${a.status}</span>
+          </div>
+        `;
+      });
+    }
+
+    if (exams.length > 0) {
+      html += `<div class="search-dropdown-section">Exams (${exams.length})</div>`;
+      exams.slice(0, 3).forEach(e => {
+        const cls = store.getClassById(e.classId);
+        const days = getDaysUntil(e.date);
+        html += `
+          <div class="search-result-item" data-type="exam" data-id="${e.id}">
+            <div class="search-result-main">
+              <span style="font-size:1rem;">📝</span>
+              <div>
+                <div class="search-result-title">${escapeHTML(e.title)}</div>
+                <div class="search-result-sub">${cls ? escapeHTML(cls.name) + ' · ' : ''}${new Date(e.date).toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${e.startTime}</div>
+              </div>
+            </div>
+            <span class="search-result-badge badge ${days <= 2 ? 'danger' : 'primary'}">${days === 0 ? 'Today' : `${days}d left`}</span>
+          </div>
+        `;
+      });
+    }
+
+    if (classes.length > 0) {
+      html += `<div class="search-dropdown-section">Courses (${classes.length})</div>`;
+      classes.slice(0, 3).forEach(c => {
+        html += `
+          <div class="search-result-item" data-type="class" data-id="${c.id}">
+            <div class="search-result-main">
+              <div style="width:10px; height:10px; border-radius:50%; background:${c.color};"></div>
+              <div>
+                <div class="search-result-title">${escapeHTML(c.name)}</div>
+                <div class="search-result-sub">${c.teacher ? escapeHTML(c.teacher) + ' · ' : ''}Room ${c.room || 'TBD'}</div>
+              </div>
+            </div>
+            <span class="search-result-badge badge neutral">${c.code || 'Course'}</span>
+          </div>
+        `;
+      });
+    }
+
+    dropdown.innerHTML = html;
+    dropdown.style.display = 'block';
+
+    dropdown.querySelectorAll('.search-result-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const type = item.getAttribute('data-type');
+        const id = item.getAttribute('data-id');
+        dropdown.style.display = 'none';
+        if (elements.globalSearchInput) elements.globalSearchInput.value = '';
+        state.searchQuery = '';
+
+        if (type === 'task') {
+          const task = store.getAssignments().find(a => a.id === id);
+          if (task) {
+            navigateTo('assignments');
+            openAssignmentModal(task);
+          }
+        } else if (type === 'exam') {
+          const exam = store.getExams().find(e => e.id === id);
+          if (exam) {
+            navigateTo('exams');
+            openExamModal(exam);
+          }
+        } else if (type === 'class') {
+          navigateTo('classes');
+        }
+      });
+    });
+  }
+
   function initApp() {
     cacheDOMElements();
     initTheme();
@@ -3759,6 +4805,7 @@ textarea.form-control {
     }
 
     updateSidebarUser();
+    updateBadges();
     
     // Automatic persistence hooks
     window.addEventListener('beforeunload', () => store.saveToStorage());
@@ -3807,11 +4854,14 @@ textarea.form-control {
   function cacheDOMElements() {
     elements = {
       appContainer: document.getElementById('app-container'),
-      sidebar: document.querySelector('.app-sidebar'),
+      sidebar: document.getElementById('app-sidebar') || document.querySelector('.app-sidebar'),
+      sidebarBackdrop: document.getElementById('sidebar-backdrop'),
       mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
       themeToggleBtn: document.getElementById('theme-toggle-btn'),
       notificationBtn: document.getElementById('notification-btn'),
       headerNotificationDot: document.getElementById('header-notification-dot'),
+      headerStreakBtn: document.getElementById('header-streak-btn'),
+      headerStreakCount: document.getElementById('header-streak-count'),
       headerAuthBtn: document.getElementById('header-auth-btn'),
       sidebarUserCard: document.getElementById('sidebar-user-card'),
       sidebarAuthBtn: document.getElementById('sidebar-auth-btn'),
@@ -3820,6 +4870,7 @@ textarea.form-control {
       userStatusDisplay: document.getElementById('user-status-display'),
       quickAddBtn: document.getElementById('quick-add-btn'),
       globalSearchInput: document.getElementById('global-search-input'),
+      searchDropdown: document.getElementById('search-dropdown-menu'),
       semesterSelect: document.getElementById('semester-select'),
       navItems: document.querySelectorAll('.nav-item, .mobile-nav-btn'),
       viewSections: document.querySelectorAll('.view-section'),
@@ -3852,7 +4903,26 @@ textarea.form-control {
     const next = current === 'dark' ? 'light' : 'dark';
     store.updateSettings({ theme: next });
     applyTheme(next);
+    triggerHaptic('selection');
     showToast(`Theme switched to ${next} mode`, 'info');
+  }
+
+  function closeMobileSidebar() {
+    if (elements.sidebar && elements.sidebar.classList.contains('mobile-open')) {
+      elements.sidebar.classList.remove('mobile-open');
+    }
+    if (elements.sidebarBackdrop) {
+      elements.sidebarBackdrop.classList.remove('active');
+    }
+  }
+
+  function openMobileSidebar() {
+    if (elements.sidebar) {
+      elements.sidebar.classList.add('mobile-open');
+    }
+    if (elements.sidebarBackdrop) {
+      elements.sidebarBackdrop.classList.add('active');
+    }
   }
 
   function bindGlobalEvents() {
@@ -3861,20 +4931,34 @@ textarea.form-control {
         e.preventDefault();
         const target = btn.getAttribute('data-nav-target');
         navigateTo(target);
-        if (elements.sidebar && elements.sidebar.classList.contains('mobile-open')) {
-          elements.sidebar.classList.remove('mobile-open');
-        }
+        closeMobileSidebar();
+        triggerHaptic('light');
       });
     });
 
     if (elements.mobileMenuToggle) {
       elements.mobileMenuToggle.addEventListener('click', () => {
-        elements.sidebar?.classList.toggle('mobile-open');
+        if (elements.sidebar && elements.sidebar.classList.contains('mobile-open')) {
+          closeMobileSidebar();
+        } else {
+          openMobileSidebar();
+        }
       });
+    }
+
+    if (elements.sidebarBackdrop) {
+      elements.sidebarBackdrop.addEventListener('click', closeMobileSidebar);
     }
 
     if (elements.themeToggleBtn) {
       elements.themeToggleBtn.addEventListener('click', toggleTheme);
+    }
+
+    if (elements.headerStreakBtn) {
+      elements.headerStreakBtn.addEventListener('click', () => {
+        triggerHaptic('light');
+        navigateTo('analytics');
+      });
     }
 
     if (elements.quickAddBtn) {
@@ -3897,10 +4981,14 @@ textarea.form-control {
 
     if (elements.globalSearchInput) {
       elements.globalSearchInput.addEventListener('input', (e) => {
-        state.searchQuery = e.target.value.trim().toLowerCase();
-        if (state.currentView === 'assignments') renderAssignmentsView();
-        else if (state.currentView === 'dashboard') renderDashboardView();
-        else if (state.currentView === 'exams') renderExamsView();
+        handleGlobalSearchInput(e.target.value);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#global-search-wrapper')) {
+          const dropdown = document.getElementById('search-dropdown-menu');
+          if (dropdown) dropdown.style.display = 'none';
+        }
       });
     }
 
@@ -3930,8 +5018,15 @@ textarea.form-control {
         e.preventDefault();
         openQuickAddModal();
       }
-      if (e.key === 'Escape' && state.modalContext) {
-        closeModal();
+      if (e.key === 'Escape') {
+        const dropdown = document.getElementById('search-dropdown-menu');
+        if (dropdown && dropdown.style.display !== 'none') {
+          dropdown.style.display = 'none';
+        }
+        if (state.modalContext) {
+          closeModal();
+        }
+        closeMobileSidebar();
       }
     });
   }
@@ -3998,11 +5093,13 @@ textarea.form-control {
   }
 
   function updateBadges() {
+    const data = store.getState();
     const assignments = store.getAssignments().filter(a => a.status !== 'completed');
     const badgeAsg = document.getElementById('nav-badge-assignments');
     if (badgeAsg) {
       badgeAsg.textContent = assignments.length;
       badgeAsg.className = 'nav-badge' + (assignments.some(a => isOverdue(a.dueDate)) ? ' danger' : '');
+      badgeAsg.style.display = assignments.length > 0 ? 'inline-flex' : 'none';
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -4010,6 +5107,19 @@ textarea.form-control {
     const badgeExams = document.getElementById('nav-badge-exams');
     if (badgeExams) {
       badgeExams.textContent = upcomingExams.length;
+      badgeExams.style.display = upcomingExams.length > 0 ? 'inline-flex' : 'none';
+    }
+
+    // Header Streak Badge
+    const streakCount = document.getElementById('header-streak-count');
+    if (streakCount) {
+      streakCount.textContent = (data.streaks?.currentStreak) || 0;
+    }
+
+    // Notification Dot for overdue/due soon items
+    const overdueCount = assignments.filter(a => isOverdue(a.dueDate)).length;
+    if (elements.headerNotificationDot) {
+      elements.headerNotificationDot.style.display = overdueCount > 0 ? 'block' : 'none';
     }
   }
 
@@ -4129,12 +5239,12 @@ textarea.form-control {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
           </div>
           <div class="stat-content">
-            <span class="stat-label">Cumulative GPA</span>
+            <span class="stat-label">Weighted GPA 🔥</span>
             <div class="stat-value">
-              ${gpaData.gpa !== null ? gpaData.gpa.toFixed(2) : '—'}
+              ${gpaData.weightedGpa !== null ? gpaData.weightedGpa.toFixed(2) : (gpaData.gpa !== null ? gpaData.gpa.toFixed(2) : '—')}
             </div>
             <span class="stat-subtext">
-              ${gpaData.gpa !== null ? `Scale: 4.00 (${store.percentageToLetter((gpaData.gpa / 4) * 100)})` : 'Add graded work'}
+              ${gpaData.unweightedGpa !== null ? `Unweighted: ${gpaData.unweightedGpa.toFixed(2)} / 4.00` : 'Add graded work'}
             </span>
           </div>
         </div>
@@ -4802,10 +5912,10 @@ textarea.form-control {
         <div class="calendar-day-cell ${isToday ? 'today' : ''}" data-date="${dateStr}">
           <span class="calendar-day-number">${day}</span>
           <div style="display:flex; flex-direction:column; gap:2px; margin-top:2px; overflow:hidden;">
-            ${dayExams.map(e => `<span class="cal-event-pill" style="background:#ef4444;">📝 ${e.title}</span>`).join('')}
+            ${dayExams.map(e => `<span class="cal-event-pill" data-cal-exam-id="${e.id}" style="background:#ef4444;" title="Click to view/edit exam">📝 ${escapeHTML(e.title)}</span>`).join('')}
             ${dayAsgs.map(a => {
               const cls = store.getClassById(a.classId);
-              return `<span class="cal-event-pill" style="background:${cls ? cls.color : 'var(--accent)'};">${a.title}</span>`;
+              return `<span class="cal-event-pill" data-cal-task-id="${a.id}" style="background:${cls ? cls.color : 'var(--accent)'};" title="Click to view/edit assignment">${escapeHTML(a.title)}</span>`;
             }).join('')}
           </div>
         </div>
@@ -4867,6 +5977,24 @@ textarea.form-control {
       renderCalendarView();
     });
     container.querySelector('#cal-btn-add')?.addEventListener('click', () => openAssignmentModal());
+
+    container.querySelectorAll('[data-cal-task-id]').forEach(pill => {
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = pill.getAttribute('data-cal-task-id');
+        const task = store.getAssignments().find(a => a.id === id);
+        if (task) openAssignmentModal(task);
+      });
+    });
+
+    container.querySelectorAll('[data-cal-exam-id]').forEach(pill => {
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = pill.getAttribute('data-cal-exam-id');
+        const exam = store.getExams().find(ex => ex.id === id);
+        if (exam) openExamModal(exam);
+      });
+    });
 
     container.querySelectorAll('.calendar-day-cell:not(.other-month)').forEach(cell => {
       cell.addEventListener('click', () => {
@@ -4976,21 +6104,30 @@ textarea.form-control {
 
       <!-- GPA Hero Card -->
       <div class="card-panel" style="background:linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface-subtle) 100%); border-left: 5px solid var(--accent); margin-bottom:1.5rem;">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1.5rem;">
           <div>
-            <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);">Term Cumulative GPA</div>
-            <div style="font-size:2.25rem; font-weight:800; color:var(--text-primary); letter-spacing:-0.03em; margin:0.25rem 0;">
-              ${gpaData.gpa !== null ? gpaData.gpa.toFixed(2) : '—'} <span style="font-size:1rem; color:var(--text-muted); font-weight:500;">/ 4.00</span>
+            <div style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; color:var(--accent);">Weighted Cumulative GPA</div>
+            <div style="font-size:2.5rem; font-weight:900; color:var(--text-primary); letter-spacing:-0.03em; margin:0.25rem 0;">
+              ${gpaData.weightedGpa !== null ? gpaData.weightedGpa.toFixed(2) : (gpaData.gpa !== null ? gpaData.gpa.toFixed(2) : '—')} <span style="font-size:1rem; color:var(--text-muted); font-weight:500;">/ 5.00</span>
             </div>
             <div style="font-size:0.8125rem; color:var(--text-secondary);">
-              Based on ${gpaData.gradedCount} graded course${gpaData.gradedCount === 1 ? '' : 's'} (${gpaData.totalCredits} total credits)
+              ${gpaData.weightedCount > 0 ? `<strong>${gpaData.weightedCount}</strong> AP / Pre-AP (5.0 Scale) · ` : ''}<strong>${gpaData.regularCount}</strong> Regular (4.0 Scale)
             </div>
           </div>
-          <div style="display:flex; gap:0.5rem; align-items:center;">
-            <div style="text-align:right;">
+
+          <div style="display:flex; gap:1.5rem; align-items:center; flex-wrap:wrap;">
+            <div>
+              <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Unweighted GPA</div>
+              <div style="font-size:1.75rem; font-weight:800; color:var(--text-primary); margin:0.25rem 0;">
+                ${gpaData.unweightedGpa !== null ? gpaData.unweightedGpa.toFixed(2) : '—'} <span style="font-size:0.875rem; font-weight:500; color:var(--text-muted);">/ 4.00</span>
+              </div>
+              <div style="font-size:0.75rem; color:var(--text-secondary);">${gpaData.gradedCount} graded courses (${gpaData.totalCredits} credits)</div>
+            </div>
+
+            <div style="text-align:right; border-left:1px solid var(--border-default); padding-left:1.5rem;">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">Overall Standing</div>
-              <div style="font-size:1.25rem; font-weight:800; color:var(--accent);">
-                ${gpaData.gpa !== null ? store.percentageToLetter((gpaData.gpa / 4) * 100) : 'N/A'}
+              <div style="font-size:1.5rem; font-weight:800; color:var(--accent);">
+                ${gpaData.unweightedGpa !== null ? store.percentageToLetter((gpaData.unweightedGpa / 4) * 100) : 'N/A'}
               </div>
             </div>
           </div>
@@ -5001,12 +6138,20 @@ textarea.form-control {
       <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
         ${classes.map(c => {
           const grade = store.calculateClassGrade(c.id);
+          const level = grade.courseLevel || store.detectCourseLevel(c.name);
+          const isPreAp = String(level).toUpperCase().includes('PRE');
+          const isAp = String(level).toUpperCase().includes('AP') || String(level).toUpperCase().includes('IB') || String(level).toUpperCase().includes('DUAL');
+          const levelClass = isPreAp ? 'preap' : (isAp ? 'ap' : 'regular');
+          const levelLabel = isPreAp ? 'Pre-AP (5.0)' : (isAp ? 'AP (5.0)' : 'Regular (4.0)');
           return `
             <div class="card-panel" style="margin-bottom:0; display:flex; flex-direction:column;">
               <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.75rem;">
                 <div>
-                  <span class="badge" style="background:${c.color}20; color:${c.color}; margin-bottom:0.25rem;">${c.code || 'Course'}</span>
-                  <div style="font-weight:700; font-size:1rem; color:var(--text-primary);">${c.name}</div>
+                  <div style="display:flex; align-items:center; gap:0.375rem; margin-bottom:0.25rem;">
+                    <span class="badge" style="background:${c.color}20; color:${c.color};">${c.code || 'Course'}</span>
+                    <span class="ps-level-badge ${levelClass}">${levelLabel}</span>
+                  </div>
+                  <div style="font-weight:700; font-size:1rem; color:var(--text-primary);">${escapeHTML(c.name)}</div>
                 </div>
                 <div style="text-align:right;">
                   <div style="font-size:1.25rem; font-weight:800; color:var(--text-primary);">${grade.score !== null ? `${grade.score}%` : '—'}</div>
@@ -5019,7 +6164,7 @@ textarea.form-control {
                 ${grade.categories.map(cat => `
                   <div>
                     <div style="display:flex; justify-content:space-between; color:var(--text-secondary); margin-bottom:2px;">
-                      <span>${cat.name} (${cat.weight}%)</span>
+                      <span>${escapeHTML(cat.name)} (${cat.weight}%)</span>
                       <span style="font-weight:700;">${cat.percentage !== null ? `${Math.round(cat.percentage)}%` : 'No scores'}</span>
                     </div>
                     <div style="height:5px; background:var(--bg-surface-hover); border-radius:var(--radius-full); overflow:hidden;">
@@ -5440,6 +6585,268 @@ textarea.form-control {
     container.querySelector('#btn-ps-import-paste')?.addEventListener('click', () => openPowerSchoolImportModal());
     container.querySelector('#btn-ps-bookmarklet-info')?.addEventListener('click', () => openPowerSchoolBookmarkletModal());
     container.querySelector('#btn-ps-auto-sync-info')?.addEventListener('click', () => openPowerSchoolAutoSyncModal());
+  }
+
+  // --- VIEW: FOCUS TIMER & POMODORO ---
+  function renderFocusTimerView() {
+    const container = document.getElementById('view-focus');
+    if (!container) return;
+
+    const data = store.getState();
+    const settings = data.pomodoro?.settings || { workDuration: 25, shortBreak: 5, longBreak: 15, sessionsBeforeLong: 4 };
+    const timer = state.pomodoroTimer;
+    const classes = store.getClasses();
+
+    const mins = Math.floor(timer.timeRemaining / 60);
+    const secs = timer.timeRemaining % 60;
+    const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+    let total = settings.workDuration * 60;
+    if (timer.currentPhase === 'shortBreak') total = settings.shortBreak * 60;
+    if (timer.currentPhase === 'longBreak') total = settings.longBreak * 60;
+    const progress = Math.max(0, Math.min(100, ((total - timer.timeRemaining) / total) * 100));
+
+    const phaseLabel = timer.currentPhase === 'work' 
+      ? 'Focus Session' 
+      : (timer.currentPhase === 'shortBreak' ? 'Short Break' : 'Long Break');
+
+    const linkedClass = classes.find(c => c.id === timer.linkedClassId);
+
+    container.innerHTML = `
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Focus Timer & Pomodoro</h1>
+          <p class="section-subtitle">Timed study intervals with adaptive break cycles, course tagging, and study streak rewards.</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn-secondary" id="focus-btn-chime-test" title="Test Focus Completion Audio Chime">
+            🔔 Sound Test
+          </button>
+        </div>
+      </div>
+
+      <!-- Focus Presets Selector -->
+      <div class="focus-presets-row">
+        <button class="focus-preset-pill ${timer.currentPhase === 'work' && settings.workDuration === 25 ? 'active' : ''}" data-preset-min="25" data-phase="work">25m Pomodoro</button>
+        <button class="focus-preset-pill ${timer.currentPhase === 'work' && settings.workDuration === 50 ? 'active' : ''}" data-preset-min="50" data-phase="work">50m Deep Work</button>
+        <button class="focus-preset-pill ${timer.currentPhase === 'work' && settings.workDuration === 15 ? 'active' : ''}" data-preset-min="15" data-phase="work">15m Quick Sprint</button>
+        <button class="focus-preset-pill ${timer.currentPhase === 'shortBreak' ? 'active' : ''}" data-preset-min="5" data-phase="shortBreak">5m Short Break</button>
+        <button class="focus-preset-pill ${timer.currentPhase === 'longBreak' ? 'active' : ''}" data-preset-min="15" data-phase="longBreak">15m Long Break</button>
+      </div>
+
+      <!-- Timer Central Card -->
+      <div class="focus-timer-card">
+        <div id="pomodoro-ring" class="pomodoro-timer-ring ${timer.isRunning ? 'active-pulse' : ''}" style="background: conic-gradient(var(--accent) ${progress}%, var(--bg-surface-active) ${progress}%);">
+          <div class="pomodoro-timer-inner">
+            <div class="pomodoro-phase">${phaseLabel}</div>
+            <div id="pomodoro-time-display" class="pomodoro-time">${timeStr}</div>
+            <div class="pomodoro-counter">Interval ${timer.sessionsCompleted % settings.sessionsBeforeLong + 1} of ${settings.sessionsBeforeLong}</div>
+            ${linkedClass ? `<div class="pomodoro-course-tag" style="border-left: 3px solid ${linkedClass.color};">${escapeHTML(linkedClass.name)}</div>` : ''}
+          </div>
+        </div>
+
+        <div style="margin-top: 1.5rem; display:flex; align-items:center; gap:0.5rem; max-width:280px; width:100%;">
+          <select class="form-control" id="focus-class-select" style="font-size:0.8125rem; padding:0.375rem 0.625rem;">
+            <option value="">No Course Tagged (General Focus)</option>
+            ${classes.map(c => `<option value="${c.id}" ${timer.linkedClassId === c.id ? 'selected' : ''}>📚 ${escapeHTML(c.name)}</option>`).join('')}
+          </select>
+        </div>
+
+        <div class="pomodoro-controls">
+          ${!timer.isRunning 
+            ? `<button class="btn-primary pomodoro-control-btn" id="btn-focus-start">▶ Start Focus</button>` 
+            : `<button class="btn-secondary pomodoro-control-btn" id="btn-focus-pause">⏸ Pause</button>`}
+          <button class="btn-secondary pomodoro-control-btn" id="btn-focus-reset">↺ Reset</button>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stat-cards-grid" style="margin-top: 1.5rem;">
+        <div class="stat-card">
+          <div class="stat-icon-wrapper blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-label">Today's Focus</span>
+            <div class="stat-value">${data.pomodoro?.todayFocusMinutes || 0} <span style="font-size:1rem; font-weight:500;">min</span></div>
+            <span class="stat-subtext">+25 XP per session completed</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon-wrapper emerald">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-label">Total Focus Time</span>
+            <div class="stat-value">${Math.floor((data.pomodoro?.totalFocusMinutes || 0) / 60)}h ${(data.pomodoro?.totalFocusMinutes || 0) % 60}m</div>
+            <span class="stat-subtext">${(data.pomodoro?.sessions || []).length} total sessions recorded</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon-wrapper amber">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-label">Study Streak</span>
+            <div class="stat-value">${data.streaks?.currentStreak || 0} <span style="font-size:1rem; font-weight:500;">days</span></div>
+            <span class="stat-subtext">Best: ${data.streaks?.longestStreak || 0} days</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Attach event handlers
+    container.querySelector('#btn-focus-start')?.addEventListener('click', () => startPomodoro());
+    container.querySelector('#btn-focus-pause')?.addEventListener('click', () => pausePomodoro());
+    container.querySelector('#btn-focus-reset')?.addEventListener('click', () => resetPomodoro());
+    container.querySelector('#focus-btn-chime-test')?.addEventListener('click', () => {
+      playCompletionChime();
+      triggerHaptic('success');
+      showToast('Sound chime tested 🔔', 'info');
+    });
+
+    container.querySelector('#focus-class-select')?.addEventListener('change', (e) => {
+      state.pomodoroTimer.linkedClassId = e.target.value || null;
+    });
+
+    container.querySelectorAll('.focus-preset-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mins = Number(btn.getAttribute('data-preset-min')) || 25;
+        const phase = btn.getAttribute('data-phase') || 'work';
+        selectPomodoroPreset(mins, phase);
+      });
+    });
+  }
+
+  // --- VIEW: ACADEMIC ANALYTICS & GAMIFICATION ---
+  function renderAnalyticsView() {
+    const container = document.getElementById('view-analytics');
+    if (!container) return;
+
+    const data = store.getState();
+    const streaks = data.streaks || { currentStreak: 0, longestStreak: 0, totalXP: 0, level: 1, achievements: [], dailyLog: {} };
+    const assignments = store.getAssignments();
+    const completed = assignments.filter(a => a.status === 'completed').length;
+    const total = assignments.length;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    // XP Progress Calculation
+    const currentXP = streaks.totalXP || 0;
+    const currentLevel = streaks.level || (Math.floor(currentXP / 500) + 1);
+    const xpInCurrentLevel = currentXP % 500;
+    const xpProgressPercent = Math.min(100, Math.round((xpInCurrentLevel / 500) * 100));
+    const levelTitle = getLevelTitle(currentLevel);
+
+    // Generate 12-week activity heatmap (84 days)
+    let heatmapHTML = '<div class="streak-heatmap">';
+    const today = new Date();
+    for (let i = 83; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const log = streaks.dailyLog?.[dateStr];
+      const tasksCount = log?.tasksCompleted || 0;
+      const focusMin = log?.focusMinutes || 0;
+      const intensity = (tasksCount > 0 || focusMin > 0)
+        ? Math.min(4, Math.max(1, Math.ceil((tasksCount * 2 + focusMin / 15) / 2)))
+        : 0;
+      const label = `${dateStr}: ${tasksCount} task${tasksCount !== 1 ? 's' : ''}, ${focusMin} min focus`;
+      heatmapHTML += `<div class="heatmap-cell intensity-${intensity}" title="${label}"></div>`;
+    }
+    heatmapHTML += '</div>';
+
+    const badgesList = [
+      { id: 'first_task', icon: '🚀', title: 'Getting Started', desc: 'Completed first task' },
+      { id: 'streak_3', icon: '🔥', title: 'On a Roll', desc: '3-day study streak' },
+      { id: 'streak_7', icon: '⚡', title: 'Weekly Warrior', desc: '7-day study streak' },
+      { id: 'streak_30', icon: '👑', title: 'Monthly Master', desc: '30-day study streak' },
+      { id: 'focus_60', icon: '🧠', title: 'Deep Focus', desc: '60+ min focus logged' },
+      { id: 'tasks_5', icon: '✅', title: 'Task Crusher', desc: '5 assignments done' },
+      { id: 'tasks_25', icon: '🌟', title: 'Academic Engine', desc: '25 assignments done' },
+      { id: 'full_schedule', icon: '📚', title: 'Full Schedule', desc: '4+ courses enrolled' }
+    ];
+
+    let badgesHTML = '';
+    badgesList.forEach(b => {
+      const unlocked = Array.isArray(streaks.achievements) && streaks.achievements.includes(b.id);
+      badgesHTML += `
+        <div class="achievement-card ${unlocked ? 'unlocked' : 'locked'}" title="${b.desc}">
+          <div class="achievement-icon">${b.icon}</div>
+          <div class="achievement-title">${b.title}</div>
+          <div class="achievement-desc">${b.desc}</div>
+          <span class="achievement-badge-pill">${unlocked ? '✓ Unlocked' : 'Locked'}</span>
+        </div>
+      `;
+    });
+
+    container.innerHTML = `
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Academic Analytics & Streaks</h1>
+          <p class="section-subtitle">Workload distribution, gamified study streak, and milestone achievements.</p>
+        </div>
+      </div>
+
+      <!-- Streaks & Level Hero Card -->
+      <div class="streak-hero-card" style="margin-bottom: 1.5rem;">
+        <div class="streak-metrics-row">
+          <div>
+            <div class="streak-metric-val" style="color: var(--warning);">${streaks.currentStreak || 0}</div>
+            <div class="streak-metric-label">Current Streak 🔥</div>
+          </div>
+          <div>
+            <div class="streak-metric-val" style="color: var(--text-primary);">${streaks.longestStreak || 0}</div>
+            <div class="streak-metric-label">Longest Streak ⚡</div>
+          </div>
+          <div>
+            <div class="streak-metric-val" style="color: var(--accent);">${completionRate}%</div>
+            <div class="streak-metric-label">Task Completion Rate 📈</div>
+          </div>
+        </div>
+
+        <div class="xp-progress-wrapper">
+          <div class="xp-progress-header">
+            <div class="xp-level-title">
+              <span>🎖️</span> Level ${currentLevel} · ${levelTitle}
+            </div>
+            <div class="xp-points-text">${xpInCurrentLevel} / 500 XP (${currentXP} Total XP)</div>
+          </div>
+          <div class="xp-progress-bar">
+            <div class="xp-progress-fill" style="width: ${xpProgressPercent}%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity Heatmap Panel -->
+      <div class="card-panel" style="margin-bottom: 1.5rem;">
+        <div class="panel-header">
+          <h3 class="panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            12-Week Study & Task Heatmap
+          </h3>
+          <span style="font-size:0.75rem; color:var(--text-muted);">Darker green = higher study intensity</span>
+        </div>
+        <div class="streak-heatmap-container">
+          ${heatmapHTML}
+        </div>
+      </div>
+
+      <!-- Achievements Panel -->
+      <div class="card-panel">
+        <div class="panel-header">
+          <h3 class="panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>
+            Milestones & Achievements
+          </h3>
+          <span style="font-size:0.75rem; color:var(--text-muted);">${(streaks.achievements || []).length} of ${badgesList.length} Unlocked</span>
+        </div>
+        <div class="achievements-grid">
+          ${badgesHTML}
+        </div>
+      </div>
+    `;
   }
 
   // --- MODALS ENGINE ---
@@ -5898,7 +7305,7 @@ textarea.form-control {
           <button class="modal-close-btn" id="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.75rem; margin-bottom:1rem;">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:0.75rem; margin-bottom:1rem;">
             <button class="onboarding-step-item" id="quick-btn-task" style="text-align:center; cursor:pointer;">
               <span style="font-size:1.5rem; margin-bottom:0.25rem;">📋</span>
               <span style="font-weight:700; font-size:0.875rem;">Assignment</span>
@@ -5910,6 +7317,10 @@ textarea.form-control {
             <button class="onboarding-step-item" id="quick-btn-class" style="text-align:center; cursor:pointer;">
               <span style="font-size:1.5rem; margin-bottom:0.25rem;">📚</span>
               <span style="font-weight:700; font-size:0.875rem;">Course</span>
+            </button>
+            <button class="onboarding-step-item" id="quick-btn-sched" style="text-align:center; cursor:pointer;">
+              <span style="font-size:1.5rem; margin-bottom:0.25rem;">⏰</span>
+              <span style="font-weight:700; font-size:0.875rem;">Time Slot</span>
             </button>
           </div>
         </div>
@@ -5928,6 +7339,10 @@ textarea.form-control {
       dialog.querySelector('#quick-btn-class')?.addEventListener('click', () => {
         closeModal();
         openClassModal();
+      });
+      dialog.querySelector('#quick-btn-sched')?.addEventListener('click', () => {
+        closeModal();
+        openScheduleModal();
       });
     });
   }
@@ -6034,7 +7449,8 @@ textarea.form-control {
           isProfileConfigured: true
         });
 
-        showToast('Profile saved!', 'success');
+        updateSidebarUser();
+        showToast('Profile updated!', 'success');
         closeModal();
       });
     });
@@ -6061,8 +7477,8 @@ textarea.form-control {
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Course *</label>
-                <select class="form-control" name="classId" required id="modal-asg-class">
-                  ${classes.length > 0 ? classes.map(c => `<option value="${c.id}" ${existing && existing.classId === c.id ? 'selected' : ''}>${c.name}</option>`).join('') : '<option value="">No courses added yet</option>'}
+                <select class="form-control" name="classId" id="modal-asg-class">
+                  ${classes.length > 0 ? classes.map(c => `<option value="${c.id}" ${existing && existing.classId === c.id ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('') + '<option value="__new_course__">+ Add New Course...</option>' : '<option value="">General / Non-course</option><option value="__new_course__">+ Add First Course...</option>'}
                 </select>
               </div>
 
@@ -6111,13 +7527,22 @@ textarea.form-control {
 
     openModalHTML(html, dialog => {
       dialog.querySelector('#modal-cancel')?.addEventListener('click', closeModal);
+
+      const classSelect = dialog.querySelector('#modal-asg-class');
+      classSelect?.addEventListener('change', () => {
+        if (classSelect.value === '__new_course__') {
+          closeModal();
+          openClassModal();
+        }
+      });
+
       const form = dialog.querySelector('#form-assignment');
       form?.addEventListener('submit', (e) => {
         e.preventDefault();
         const fd = new FormData(form);
         const data = {
           title: fd.get('title').trim(),
-          classId: fd.get('classId'),
+          classId: fd.get('classId') === '__new_course__' ? '' : fd.get('classId'),
           type: fd.get('type'),
           dueDate: fd.get('dueDate'),
           priority: fd.get('priority'),
@@ -6128,7 +7553,16 @@ textarea.form-control {
           store.updateAssignment(existing.id, data);
           showToast('Assignment updated', 'success');
         } else {
-          store.addAssignment(data);
+          const created = store.addAssignment(data);
+          if (created.dueDate) {
+            scheduleNativeNotification(
+              `due-${created.id}`,
+              `Due Soon: ${created.title}`,
+              `Assignment deadline at ${new Date(created.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+              new Date(created.dueDate).getTime() - (2 * 60 * 60 * 1000),
+              'assignment'
+            );
+          }
           showToast('Assignment created!', 'success');
         }
         closeModal();
@@ -6157,8 +7591,8 @@ textarea.form-control {
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Course *</label>
-                <select class="form-control" name="classId" required>
-                  ${classes.map(c => `<option value="${c.id}" ${existing && existing.classId === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                <select class="form-control" name="classId" id="modal-exam-class">
+                  ${classes.length > 0 ? classes.map(c => `<option value="${c.id}" ${existing && existing.classId === c.id ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('') + '<option value="__new_course__">+ Add New Course...</option>' : '<option value="">General / Non-course</option><option value="__new_course__">+ Add First Course...</option>'}
                 </select>
               </div>
 
@@ -6208,6 +7642,15 @@ textarea.form-control {
 
     openModalHTML(html, dialog => {
       dialog.querySelector('#modal-cancel')?.addEventListener('click', closeModal);
+
+      const classSelect = dialog.querySelector('#modal-exam-class');
+      classSelect?.addEventListener('change', () => {
+        if (classSelect.value === '__new_course__') {
+          closeModal();
+          openClassModal();
+        }
+      });
+
       const form = dialog.querySelector('#form-exam');
       form?.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -6268,6 +7711,15 @@ textarea.form-control {
               </div>
             </div>
 
+            <div class="form-group">
+              <label class="form-label">Course Level (GPA Weighting)</label>
+              <select class="form-control" name="courseLevel">
+                <option value="Regular" ${(!existing || existing.courseLevel === 'Regular') ? 'selected' : ''}>Standard / On-Level (4.0 Max · +0.0 Boost)</option>
+                <option value="Honors" ${(existing && (existing.courseLevel === 'Honors' || existing.courseLevel === 'Pre-AP' || existing.courseLevel === 'Advanced')) ? 'selected' : ''}>Honors / Pre-AP / Advanced (4.5 Max · +0.5 Boost)</option>
+                <option value="AP" ${(existing && (existing.courseLevel === 'AP' || existing.courseLevel === 'IB' || existing.courseLevel === 'Dual Credit' || existing.courseLevel === 'College')) ? 'selected' : ''}>AP / IB / Dual Credit / College (5.0 Max · +1.0 Boost)</option>
+              </select>
+            </div>
+
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Instructor Name</label>
@@ -6318,6 +7770,7 @@ textarea.form-control {
           name: fd.get('name').trim(),
           code: fd.get('code').trim(),
           credits: Number(fd.get('credits')),
+          courseLevel: fd.get('courseLevel') || store.detectCourseLevel(fd.get('name').trim()),
           teacher: fd.get('teacher').trim(),
           teacherEmail: fd.get('teacherEmail').trim(),
           color: fd.get('color')
@@ -6325,9 +7778,11 @@ textarea.form-control {
 
         if (isEdit) {
           store.updateClass(existing.id, data);
+          store.rememberCourseLevel(data.name, data.courseLevel);
           showToast('Course updated', 'success');
         } else {
           store.addClass(data);
+          store.rememberCourseLevel(data.name, data.courseLevel);
           showToast('Course created!', 'success');
         }
         closeModal();
@@ -6760,7 +8215,7 @@ textarea.form-control {
           const result = await resp.json();
           showToast(result.message || 'Grades updated from PowerSchool!', 'success');
           closeModal();
-          navigateTo('gradebook');
+          navigateTo('grades');
         } catch (e) {
           showToast('Cloud sync failed: ' + e.message, 'danger');
         }
@@ -6859,14 +8314,14 @@ textarea.form-control {
     const existingClasses = store.getClasses();
 
     const html = `
-      <div class="modal-panel" style="max-width:700px;">
+      <div class="modal-panel" style="max-width:720px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-          <h2 style="font-size:1.125rem; font-weight:700; color:var(--text-primary);">📋 Import PowerSchool Grades</h2>
+          <h2 style="font-size:1.125rem; font-weight:700; color:var(--text-primary);">📋 Import PowerSchool Grades & Weighted GPA</h2>
           <button id="modal-close" class="modal-close-btn">&times;</button>
         </div>
 
         <div style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:0.75rem; line-height:1.5;">
-          Paste raw copied text from your PowerSchool Grades page (press <strong>Ctrl+A</strong> then <strong>Ctrl+C</strong>), or paste JSON from the bookmarklet.
+          Paste raw copied text from your PowerSchool Grades page (press <strong>Ctrl+A</strong> then <strong>Ctrl+C</strong>), or paste JSON from the bookmarklet. <strong>AP & Pre-AP</strong> courses automatically calculate on the <strong>5.0 Weighted Scale</strong>, while standard courses calculate on the <strong>4.0 Scale</strong>.
         </div>
 
         <textarea id="ps-paste-input" rows="6" placeholder="Paste your PowerSchool text or bookmarklet data here...
@@ -6874,11 +8329,14 @@ textarea.form-control {
 Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Select All), Ctrl+C (Copy), and paste right here." style="width:100%; font-family:'SF Mono',Consolas,monospace; font-size:0.75rem; padding:0.75rem; border:1px solid var(--border-default); border-radius:var(--radius-sm); background:var(--bg-surface-subtle); color:var(--text-primary); resize:vertical; line-height:1.5; margin-bottom:0.75rem;"></textarea>
 
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-          <button id="btn-ps-parse" class="btn-primary" style="font-size:0.8125rem;">🔍 Parse & Preview PowerSchool Data</button>
+          <button id="btn-ps-parse" class="btn-primary" style="font-size:0.8125rem;">🔍 Parse & Calculate GPA</button>
           <button id="btn-ps-clear" class="btn-secondary" style="font-size:0.75rem;">Clear Input</button>
         </div>
 
         <div id="ps-preview-area" style="display:none; border-top:1px solid var(--border-default); padding-top:1rem; margin-bottom:0.5rem;">
+          <!-- Live GPA Hero Banner -->
+          <div id="ps-gpa-hero-container"></div>
+
           <!-- Student Name banner if detected -->
           <div id="ps-student-banner" style="display:none; align-items:center; gap:0.625rem; padding:0.625rem 0.875rem; background:rgba(79, 70, 229, 0.08); border:1px solid rgba(79, 70, 229, 0.25); border-radius:var(--radius-sm); margin-bottom:1rem; font-size:0.8125rem;">
             <span style="font-size:1.125rem;">👤</span>
@@ -6909,7 +8367,7 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
           </div>
 
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-            <label style="font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary);">Classes & Grades Detected</label>
+            <label style="font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary);">Courses, Grades & Weight Tiers</label>
             <span id="ps-count-summary" style="font-size:0.75rem; color:var(--text-secondary);"></span>
           </div>
 
@@ -6932,6 +8390,7 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
       const pasteInput = dialog.querySelector('#ps-paste-input');
       const previewArea = dialog.querySelector('#ps-preview-area');
       const previewList = dialog.querySelector('#ps-preview-list');
+      const gpaHeroContainer = dialog.querySelector('#ps-gpa-hero-container');
       const parseBtn = dialog.querySelector('#btn-ps-parse');
       const clearBtn = dialog.querySelector('#btn-ps-clear');
       const confirmBtn = dialog.querySelector('#btn-ps-confirm');
@@ -6958,7 +8417,11 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
         }
 
         const result = parsePowerSchoolInput(raw);
-        parsedClasses = result.classes || [];
+        parsedClasses = (result.classes || []).map(pc => ({
+          ...pc,
+          courseLevel: pc.courseLevel || store.detectCourseLevel(pc.className),
+          credits: pc.credits || 3
+        }));
         detectedStudentName = result.studentName || null;
 
         if (!parsedClasses.length) {
@@ -6980,8 +8443,73 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
         applySmartMatch();
         renderPreview();
         previewArea.style.display = 'block';
-        showToast(`Found ${parsedClasses.length} class${parsedClasses.length !== 1 ? 'es' : ''} in PowerSchool data!`, 'success');
+
+        const gpa = calculatePreviewGPA();
+        const gpaMsg = gpa.weightedGpa !== null 
+          ? ` (Weighted GPA: ${gpa.weightedGpa.toFixed(2)} / 5.00)` 
+          : '';
+        showToast(`Parsed ${parsedClasses.length} class${parsedClasses.length !== 1 ? 'es' : ''}${gpaMsg}!`, 'success');
       });
+
+      function calculatePreviewGPA() {
+        let totalUnweightedPoints = 0;
+        let totalWeightedPoints = 0;
+        let totalCredits = 0;
+        let gradedCount = 0;
+        let weightedCount = 0;
+        let apCount = 0;
+        let preApCount = 0;
+        let regularCount = 0;
+        const letterCounts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+
+        parsedClasses.forEach(pc => {
+          if (pc._action === 'skip') return;
+          if (pc.gradePercent === null || pc.gradePercent === undefined) return;
+
+          const letter = store.percentageToLetter(pc.gradePercent);
+          const unweightedPoints = store.letterToGpaPoints(letter);
+          const level = pc.courseLevel || store.detectCourseLevel(pc.className);
+          const boost = store.getLevelWeightBoost(level);
+          const weightedPoints = unweightedPoints > 0 ? Math.min(5.0, unweightedPoints + boost) : 0;
+          const credits = pc.credits || 3;
+
+          totalUnweightedPoints += (unweightedPoints * credits);
+          totalWeightedPoints += (weightedPoints * credits);
+          totalCredits += credits;
+          gradedCount++;
+
+          if (boost > 0) {
+            weightedCount++;
+            if (String(level).toUpperCase().includes('PRE')) {
+              preApCount++;
+            } else {
+              apCount++;
+            }
+          } else {
+            regularCount++;
+          }
+
+          const baseLetter = letter[0];
+          if (letterCounts[baseLetter] !== undefined) {
+            letterCounts[baseLetter]++;
+          }
+        });
+
+        const unweightedGpa = totalCredits > 0 ? (totalUnweightedPoints / totalCredits) : null;
+        const weightedGpa = totalCredits > 0 ? (totalWeightedPoints / totalCredits) : null;
+
+        return {
+          unweightedGpa: unweightedGpa !== null ? Math.round(unweightedGpa * 100) / 100 : null,
+          weightedGpa: weightedGpa !== null ? Math.round(weightedGpa * 100) / 100 : null,
+          totalCredits,
+          gradedCount,
+          weightedCount,
+          apCount,
+          preApCount,
+          regularCount,
+          letterCounts
+        };
+      }
 
       function applySmartMatch() {
         parsedClasses.forEach(pc => {
@@ -6989,9 +8517,17 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
           if (match) {
             pc._action = `update:${match.id}`;
             pc._matchedClass = match;
+            if (match.courseLevel) {
+              pc.courseLevel = match.courseLevel;
+            } else {
+              const remembered = store.getRememberedCourseLevel(pc.className);
+              if (remembered) pc.courseLevel = remembered;
+            }
           } else {
             pc._action = 'new';
             pc._matchedClass = null;
+            const remembered = store.getRememberedCourseLevel(pc.className);
+            if (remembered) pc.courseLevel = remembered;
           }
         });
       }
@@ -7002,6 +8538,12 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
           if (match) {
             pc._action = `update:${match.id}`;
             pc._matchedClass = match;
+            if (match.courseLevel) {
+              pc.courseLevel = match.courseLevel;
+            } else {
+              const remembered = store.getRememberedCourseLevel(pc.className);
+              if (remembered) pc.courseLevel = remembered;
+            }
           } else {
             pc._action = 'skip';
             pc._matchedClass = null;
@@ -7033,6 +8575,43 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
       function renderPreview() {
         if (!previewList) return;
 
+        const previewGPA = calculatePreviewGPA();
+
+        // Render Live GPA Hero Card
+        if (gpaHeroContainer) {
+          gpaHeroContainer.innerHTML = `
+            <div class="ps-gpa-summary-card">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+                <div>
+                  <div style="font-size:0.6875rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent);">
+                    🔥 PowerSchool Projected Weighted GPA
+                  </div>
+                  <div style="font-size:2.25rem; font-weight:900; color:var(--text-primary); line-height:1.1; margin:0.25rem 0;">
+                    ${previewGPA.weightedGpa !== null ? previewGPA.weightedGpa.toFixed(2) : '—'} <span style="font-size:0.9375rem; font-weight:600; color:var(--text-muted);">/ 5.00 Max</span>
+                  </div>
+                  <div style="font-size:0.75rem; color:var(--text-secondary); display:flex; gap:0.375rem; align-items:center; flex-wrap:wrap;">
+                    ${previewGPA.preApCount > 0 ? `<span class="ps-level-badge preap">${previewGPA.preApCount} Pre-AP (5.0)</span>` : ''}
+                    ${previewGPA.apCount > 0 ? `<span class="ps-level-badge ap">${previewGPA.apCount} AP (5.0)</span>` : ''}
+                    <span class="ps-level-badge regular">${previewGPA.regularCount} Regular (4.0)</span>
+                  </div>
+                </div>
+
+                <div style="text-align:right; border-left:1px solid var(--border-default); padding-left:1.25rem;">
+                  <div style="font-size:0.6875rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted);">
+                    Unweighted GPA
+                  </div>
+                  <div style="font-size:1.75rem; font-weight:800; color:var(--text-primary); line-height:1.1; margin:0.25rem 0;">
+                    ${previewGPA.unweightedGpa !== null ? previewGPA.unweightedGpa.toFixed(2) : '—'} <span style="font-size:0.875rem; font-weight:500; color:var(--text-muted);">/ 4.00</span>
+                  </div>
+                  <div style="font-size:0.75rem; color:var(--text-secondary);">
+                    ${previewGPA.gradedCount} graded courses · ${previewGPA.letterCounts.A || 0} A${previewGPA.letterCounts.A !== 1 ? "'s" : ''}, ${previewGPA.letterCounts.B || 0} B${previewGPA.letterCounts.B !== 1 ? "'s" : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
         let activeCount = 0;
         let newCount = 0;
         let updateCount = 0;
@@ -7046,7 +8625,7 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
           }
 
           const gradeBadge = pc.gradePercent !== null && pc.gradePercent !== undefined
-            ? `<span style="display:inline-block; padding:0.15rem 0.55rem; border-radius:9999px; font-weight:700; font-size:0.75rem; background:${pc.gradePercent >= 90 ? 'rgba(16, 185, 129, 0.15)' : pc.gradePercent >= 70 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color:${pc.gradePercent >= 90 ? 'var(--success)' : pc.gradePercent >= 70 ? 'var(--warning)' : 'var(--danger)'};">${pc.gradePercent}%</span>`
+            ? `<span style="display:inline-block; padding:0.15rem 0.55rem; border-radius:9999px; font-weight:700; font-size:0.75rem; background:${pc.gradePercent >= 90 ? 'rgba(16, 185, 129, 0.15)' : pc.gradePercent >= 70 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color:${pc.gradePercent >= 90 ? 'var(--success)' : pc.gradePercent >= 70 ? 'var(--warning)' : 'var(--danger)'};">${pc.gradePercent}% (${store.percentageToLetter(pc.gradePercent)})</span>`
             : `<span style="display:inline-block; padding:0.15rem 0.55rem; border-radius:9999px; font-size:0.6875rem; background:var(--bg-surface); color:var(--text-tertiary); border:1px solid var(--border-default);">No grade posted</span>`;
 
           const metaPills = [
@@ -7056,7 +8635,7 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
           ].filter(Boolean).join(' · ');
 
           return `
-            <div style="padding:0.625rem 0.75rem; border-bottom:1px solid var(--border-default); display:flex; flex-direction:column; gap:0.375rem; ${isSkipped ? 'opacity:0.45; background:var(--bg-surface-subtle);' : ''}">
+            <div style="padding:0.75rem; border-bottom:1px solid var(--border-default); display:flex; flex-direction:column; gap:0.5rem; ${isSkipped ? 'opacity:0.45; background:var(--bg-surface-subtle);' : ''}">
               <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
                 <div style="display:flex; align-items:center; gap:0.5rem; min-width:0;">
                   <input type="checkbox" id="ps-class-check-${idx}" data-idx="${idx}" ${!isSkipped ? 'checked' : ''} style="accent-color:var(--accent-primary); width:16px; height:16px; cursor:pointer;" />
@@ -7068,17 +8647,30 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
               <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; font-size:0.6875rem; color:var(--text-secondary); padding-left:1.5rem;">
                 <div>${metaPills || 'Standard Class'}</div>
                 
-                <div style="display:flex; align-items:center; gap:0.375rem;">
-                  <label style="font-size:0.6875rem; color:var(--text-tertiary); font-weight:600;">Action:</label>
-                  <select id="ps-class-action-${idx}" data-idx="${idx}" style="font-size:0.6875rem; padding:0.25rem 0.5rem; border-radius:var(--radius-sm); border:1px solid var(--border-default); background:var(--bg-surface); color:var(--text-primary); max-width:230px;">
-                    <option value="new" ${pc._action === 'new' ? 'selected' : ''}>➕ Create as New Class</option>
-                    ${existingClasses.map(ec => `
-                      <option value="update:${ec.id}" ${pc._action === `update:${ec.id}` ? 'selected' : ''}>
-                        🔄 Update: ${escapeHTML(ec.name)}
-                      </option>
-                    `).join('')}
-                    <option value="skip" ${pc._action === 'skip' ? 'selected' : ''}>🚫 Skip / Ignore</option>
-                  </select>
+                <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                  <!-- Course Level Selector (Weighted Boost) -->
+                  <div style="display:flex; align-items:center; gap:0.25rem;">
+                    <label style="font-size:0.6875rem; color:var(--text-tertiary); font-weight:600;">Scale:</label>
+                    <select class="ps-level-select" id="ps-class-level-${idx}" data-idx="${idx}">
+                      <option value="Pre-AP" ${String(pc.courseLevel).toUpperCase().includes('PRE') ? 'selected' : ''}>Pre-AP (5.0 Scale · +1.0)</option>
+                      <option value="AP" ${(pc.courseLevel === 'AP' || pc.courseLevel === 'IB' || pc.courseLevel === 'Dual Credit' || pc.courseLevel === 'College') ? 'selected' : ''}>AP / IB (5.0 Scale · +1.0)</option>
+                      <option value="Regular" ${pc.courseLevel === 'Regular' ? 'selected' : ''}>Regular (4.0 Scale)</option>
+                    </select>
+                  </div>
+
+                  <!-- Action Selector -->
+                  <div style="display:flex; align-items:center; gap:0.25rem;">
+                    <label style="font-size:0.6875rem; color:var(--text-tertiary); font-weight:600;">Action:</label>
+                    <select id="ps-class-action-${idx}" data-idx="${idx}" style="font-size:0.6875rem; padding:0.25rem 0.5rem; border-radius:var(--radius-sm); border:1px solid var(--border-default); background:var(--bg-surface); color:var(--text-primary); max-width:200px;">
+                      <option value="new" ${pc._action === 'new' ? 'selected' : ''}>➕ Create as New Class</option>
+                      ${existingClasses.map(ec => `
+                        <option value="update:${ec.id}" ${pc._action === `update:${ec.id}` ? 'selected' : ''}>
+                          🔄 Update: ${escapeHTML(ec.name)}
+                        </option>
+                      `).join('')}
+                      <option value="skip" ${pc._action === 'skip' ? 'selected' : ''}>🚫 Skip / Ignore</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
@@ -7110,7 +8702,18 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
           });
         });
 
-        previewList.querySelectorAll('select').forEach(sel => {
+        previewList.querySelectorAll('.ps-level-select').forEach(sel => {
+          sel.addEventListener('change', () => {
+            const idx = parseInt(sel.dataset.idx);
+            if (!isNaN(idx) && parsedClasses[idx]) {
+              parsedClasses[idx].courseLevel = sel.value;
+              store.rememberCourseLevel(parsedClasses[idx].className, sel.value);
+              renderPreview();
+            }
+          });
+        });
+
+        previewList.querySelectorAll('select:not(.ps-level-select)').forEach(sel => {
           sel.addEventListener('change', () => {
             const idx = parseInt(sel.dataset.idx);
             if (!isNaN(idx) && parsedClasses[idx]) {
@@ -7133,19 +8736,22 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
         parsedClasses.forEach((pc, i) => {
           if (pc._action === 'skip') return;
 
+          // Save choice to memory for all future imports & updates
+          store.rememberCourseLevel(pc.className, pc.courseLevel);
+
           if (pc._action.startsWith('update:')) {
             // Update grades on existing class (NO NEW CLASS CREATED)
             const targetClassId = pc._action.replace('update:', '');
             const targetClass = store.getClassById(targetClassId);
             if (!targetClass) return;
 
-            // Update teacher or room if target class was missing them
-            const updates = {};
+            const updates = {
+              courseLevel: pc.courseLevel || store.detectCourseLevel(targetClass.name)
+            };
             if (!targetClass.teacher && pc.teacher) updates.teacher = pc.teacher;
             if (!targetClass.room && pc.room) updates.room = pc.room;
-            if (Object.keys(updates).length > 0) {
-              store.updateClass(targetClassId, updates);
-            }
+            store.updateClass(targetClassId, updates);
+            store.rememberCourseLevel(targetClass.name, updates.courseLevel);
 
             // Record / Update Grade Snapshot if gradePercent is present
             if (pc.gradePercent !== null && pc.gradePercent !== undefined) {
@@ -7184,7 +8790,7 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
               updatedGradeCount++;
             }
           } else if (pc._action === 'new') {
-            // Create new class
+            // Create new class with detected/chosen courseLevel
             const catTimestamp = Date.now() + i;
             const gradeCategories = [
               { id: 'gc-hw-' + catTimestamp, name: 'Homework & Assignments', weight: 30 },
@@ -7200,6 +8806,7 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
               room: pc.room || '',
               color: SUBJECT_COLORS[(colorIdx + i) % SUBJECT_COLORS.length],
               credits: 3,
+              courseLevel: pc.courseLevel || store.detectCourseLevel(pc.className),
               gradeCategories: gradeCategories,
               notes: `Imported from PowerSchool${pc.period ? ' (' + pc.period + ')' : ''}${pc.gradePercent !== null ? ' — Current grade: ' + pc.gradePercent + '%' : ''}`
             });
@@ -7229,11 +8836,12 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
         store.notify('data_imported');
         closeModal();
 
-        const messages = [];
-        if (createdCount > 0) messages.push(`${createdCount} new class${createdCount !== 1 ? 'es' : ''} added`);
-        if (updatedGradeCount > 0) messages.push(`${updatedGradeCount} grade${updatedGradeCount !== 1 ? 's' : ''} recorded`);
-        showToast(messages.join(' and ') || 'PowerSchool import complete!', 'success');
-        navigateTo('gradebook');
+        const finalGPA = calculatePreviewGPA();
+        const gpaSuffix = finalGPA.weightedGpa !== null 
+          ? ` · Weighted GPA: ${finalGPA.weightedGpa.toFixed(2)} | Unweighted: ${finalGPA.unweightedGpa.toFixed(2)}` 
+          : '';
+        showToast(`PowerSchool import complete!${gpaSuffix} 🎉`, 'success');
+        navigateTo('grades');
       });
     });
   }
@@ -7267,27 +8875,37 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
       if (json && json.source === 'powerschool' && Array.isArray(json.classes)) {
         return {
           studentName: json.studentName || studentName,
-          classes: json.classes.map(c => ({
-            className: cleanCourseName(c.className || c.name || 'Unknown Class'),
-            period: c.period || '',
-            teacher: c.teacher || '',
-            room: c.room || '',
-            gradePercent: c.gradePercent !== undefined && c.gradePercent !== null ? Number(c.gradePercent) : null,
-            gradeLetter: c.gradeLetter || null
-          }))
+          classes: json.classes.map(c => {
+            const cName = cleanCourseName(c.className || c.name || 'Unknown Class');
+            return {
+              className: cName,
+              period: c.period || '',
+              teacher: c.teacher || '',
+              room: c.room || '',
+              courseLevel: c.courseLevel || store.detectCourseLevel(cName),
+              credits: c.credits || 3,
+              gradePercent: c.gradePercent !== undefined && c.gradePercent !== null ? Number(c.gradePercent) : null,
+              gradeLetter: c.gradeLetter || null
+            };
+          })
         };
       }
       if (Array.isArray(json)) {
         return {
           studentName,
-          classes: json.filter(c => c.className || c.name).map(c => ({
-            className: cleanCourseName(c.className || c.name),
-            period: c.period || '',
-            teacher: c.teacher || '',
-            room: c.room || '',
-            gradePercent: c.gradePercent !== undefined && c.gradePercent !== null ? Number(c.gradePercent) : null,
-            gradeLetter: c.gradeLetter || null
-          }))
+          classes: json.filter(c => c.className || c.name).map(c => {
+            const cName = cleanCourseName(c.className || c.name);
+            return {
+              className: cName,
+              period: c.period || '',
+              teacher: c.teacher || '',
+              room: c.room || '',
+              courseLevel: c.courseLevel || store.detectCourseLevel(cName),
+              credits: c.credits || 3,
+              gradePercent: c.gradePercent !== undefined && c.gradePercent !== null ? Number(c.gradePercent) : null,
+              gradeLetter: c.gradeLetter || null
+            };
+          })
         };
       }
     } catch (e) {}
@@ -7429,6 +9047,8 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
               period: period || '',
               teacher: teacher || '',
               room: room || '',
+              courseLevel: store.detectCourseLevel(courseName),
+              credits: 3,
               gradePercent: gradePercent,
               gradeLetter: gradeLetter
             });
@@ -7467,7 +9087,16 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
 
           if (courseName && (gradePercent !== null || gradeLetter) && !seen[courseName.toLowerCase()]) {
             seen[courseName.toLowerCase()] = true;
-            classes.push({ className: courseName, period: '', teacher, room: '', gradePercent, gradeLetter });
+            classes.push({
+              className: courseName,
+              period: '',
+              teacher,
+              room: '',
+              courseLevel: store.detectCourseLevel(courseName),
+              credits: 3,
+              gradePercent,
+              gradeLetter
+            });
           }
         }
       }
@@ -7513,6 +9142,20 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
     });
   }
 
+  // Expose global AcademiaPro interface for native bridge and devtools
+  window.AcademiaPro = {
+    store,
+    state,
+    navigateTo,
+    startPomodoro,
+    pausePomodoro,
+    resetPomodoro,
+    selectPomodoroPreset,
+    playCompletionChime,
+    triggerHaptic,
+    updateDailyStreak
+  };
+
   // Execution Bootstrapper
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
@@ -7521,327 +9164,6 @@ Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Sele
   }
 
 })();
-
-// --- POMODORO TIMER LOGIC ---
-function startPomodoro() {
-  if (state.pomodoroTimer.isRunning) return;
-  state.pomodoroTimer.isRunning = true;
-  state.pomodoroTimer.isPaused = false;
-  state.pomodoroTimer.intervalId = setInterval(tickPomodoro, 1000);
-  if (state.currentView === 'focus') renderFocusTimerView();
-}
-
-function pausePomodoro() {
-  if (!state.pomodoroTimer.isRunning) return;
-  clearInterval(state.pomodoroTimer.intervalId);
-  state.pomodoroTimer.isRunning = false;
-  state.pomodoroTimer.isPaused = true;
-  if (state.currentView === 'focus') renderFocusTimerView();
-}
-
-function resetPomodoro() {
-  clearInterval(state.pomodoroTimer.intervalId);
-  const settings = store.getState().pomodoro.settings;
-  state.pomodoroTimer.isRunning = false;
-  state.pomodoroTimer.isPaused = false;
-  state.pomodoroTimer.currentPhase = 'work';
-  state.pomodoroTimer.timeRemaining = settings.workDuration * 60;
-  if (state.currentView === 'focus') renderFocusTimerView();
-}
-
-function tickPomodoro() {
-  if (state.pomodoroTimer.timeRemaining > 0) {
-    state.pomodoroTimer.timeRemaining--;
-    if (state.currentView === 'focus') {
-      const timeDisplay = document.getElementById('pomodoro-time-display');
-      if (timeDisplay) {
-        const mins = Math.floor(state.pomodoroTimer.timeRemaining / 60);
-        const secs = state.pomodoroTimer.timeRemaining % 60;
-        timeDisplay.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        
-        const settings = store.getState().pomodoro.settings;
-        let total = settings.workDuration * 60;
-        if (state.pomodoroTimer.currentPhase === 'shortBreak') total = settings.shortBreak * 60;
-        if (state.pomodoroTimer.currentPhase === 'longBreak') total = settings.longBreak * 60;
-        
-        const progress = ((total - state.pomodoroTimer.timeRemaining) / total) * 100;
-        const ring = document.getElementById('pomodoro-ring');
-        if (ring) ring.style.background = `conic-gradient(var(--accent) ${progress}%, var(--bg-surface-hover) ${progress}%)`;
-      }
-    }
-    
-    if (state.pomodoroTimer.timeRemaining === 0 && window.AcademiaProNative) {
-      window.AcademiaProNative.haptic('warning');
-    }
-  } else {
-    completePomodoroPhase();
-  }
-}
-
-function completePomodoroPhase() {
-  clearInterval(state.pomodoroTimer.intervalId);
-  const data = store.getState();
-  const settings = data.pomodoro.settings;
-  
-  if (state.pomodoroTimer.currentPhase === 'work') {
-    state.pomodoroTimer.sessionsCompleted++;
-    data.pomodoro.totalFocusMinutes += settings.workDuration;
-    data.pomodoro.todayFocusMinutes += settings.workDuration;
-    
-    data.pomodoro.sessions.push({
-      id: 'pom-' + Date.now(),
-      startTime: new Date(Date.now() - settings.workDuration * 60000).toISOString(),
-      endTime: new Date().toISOString(),
-      duration: settings.workDuration,
-      type: 'work',
-      completed: true
-    });
-    
-    updateDailyStreak('pomodoro');
-    
-    if (window.AcademiaProNative) {
-      window.AcademiaProNative.scheduleNotification('Focus session complete! Time for a break.', new Date(Date.now() + 1000));
-    }
-    
-    if (state.pomodoroTimer.sessionsCompleted % settings.sessionsBeforeLong === 0) {
-      state.pomodoroTimer.currentPhase = 'longBreak';
-      state.pomodoroTimer.timeRemaining = settings.longBreak * 60;
-    } else {
-      state.pomodoroTimer.currentPhase = 'shortBreak';
-      state.pomodoroTimer.timeRemaining = settings.shortBreak * 60;
-    }
-  } else {
-    state.pomodoroTimer.currentPhase = 'work';
-    state.pomodoroTimer.timeRemaining = settings.workDuration * 60;
-  }
-  
-  state.pomodoroTimer.isRunning = false;
-  state.pomodoroTimer.isPaused = false;
-  store.notify('pomodoro_update');
-  if (state.currentView === 'focus') renderFocusTimerView();
-}
-
-function updateDailyStreak(type = 'task') {
-  const data = store.getState();
-  const today = new Date().toISOString().split('T')[0];
-  
-  if (!data.streaks.dailyLog[today]) {
-    data.streaks.dailyLog[today] = { tasksCompleted: 0, focusMinutes: 0, xpEarned: 0 };
-    
-    // Check if yesterday was active
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    if (data.streaks.lastActiveDate === yesterday) {
-      data.streaks.currentStreak++;
-      if (data.streaks.currentStreak > data.streaks.longestStreak) {
-        data.streaks.longestStreak = data.streaks.currentStreak;
-      }
-    } else if (data.streaks.lastActiveDate !== today) {
-      data.streaks.currentStreak = 1;
-    }
-    data.streaks.lastActiveDate = today;
-  }
-  
-  let xpGain = 0;
-  if (type === 'task') {
-    data.streaks.dailyLog[today].tasksCompleted++;
-    xpGain = 10;
-  } else if (type === 'pomodoro') {
-    data.streaks.dailyLog[today].focusMinutes += data.pomodoro.settings.workDuration;
-    xpGain = 5;
-  }
-  
-  data.streaks.dailyLog[today].xpEarned += xpGain;
-  data.streaks.totalXP += xpGain;
-  
-  // Level up logic
-  const newLevel = Math.floor(data.streaks.totalXP / 500) + 1;
-  if (newLevel > data.streaks.level) {
-    data.streaks.level = newLevel;
-    showToast(`Level Up! You are now Level ${newLevel} 🎉`, 'success');
-  }
-  
-  checkAchievements();
-  store.notify('streak_update');
-}
-
-function checkAchievements() {
-  const data = store.getState();
-  const a = data.streaks.achievements;
-  const today = new Date().toISOString().split('T')[0];
-  const log = data.streaks.dailyLog[today] || {tasksCompleted:0, focusMinutes:0};
-  
-  const unlock = (id, title) => {
-    if (!a.includes(id)) {
-      a.push(id);
-      showToast(`Achievement Unlocked: ${title} 🏆`, 'success');
-      if (window.AcademiaProNative) window.AcademiaProNative.haptic('success');
-    }
-  };
-  
-  if (data.streaks.totalXP > 0) unlock('first_task', 'Getting Started');
-  if (data.streaks.currentStreak >= 3) unlock('streak_3', 'On a Roll');
-  if (data.streaks.currentStreak >= 7) unlock('streak_7', 'Weekly Warrior');
-  if (data.streaks.currentStreak >= 30) unlock('streak_30', 'Monthly Master');
-  if (log.focusMinutes >= 60) unlock('focus_60', 'Deep Focus');
-  
-  let totalTasks = 0;
-  for (let date in data.streaks.dailyLog) totalTasks += data.streaks.dailyLog[date].tasksCompleted;
-  if (totalTasks >= 10) unlock('tasks_10', 'Task Crusher');
-  if (totalTasks >= 50) unlock('tasks_50', 'Half Century');
-}
-
-function renderFocusTimerView() {
-  const container = document.getElementById('view-focus');
-  if (!container) return;
-  
-  const data = store.getState();
-  const settings = data.pomodoro.settings;
-  const timer = state.pomodoroTimer;
-  
-  const mins = Math.floor(timer.timeRemaining / 60);
-  const secs = timer.timeRemaining % 60;
-  const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  
-  let total = settings.workDuration * 60;
-  if (timer.currentPhase === 'shortBreak') total = settings.shortBreak * 60;
-  if (timer.currentPhase === 'longBreak') total = settings.longBreak * 60;
-  const progress = ((total - timer.timeRemaining) / total) * 100;
-  
-  const phaseLabel = timer.currentPhase === 'work' ? 'Focus Session' : (timer.currentPhase === 'shortBreak' ? 'Short Break' : 'Long Break');
-  
-  container.innerHTML = `
-    <div class="section-header">
-      <h2 class="section-title">Focus Timer</h2>
-    </div>
-    <div class="card-panel" style="display:flex; flex-direction:column; align-items:center; padding: 3rem 1rem;">
-      <div id="pomodoro-ring" class="pomodoro-timer-ring" style="background: conic-gradient(var(--accent) ${progress}%, var(--bg-surface-hover) ${progress}%);">
-        <div class="pomodoro-timer-inner">
-          <div class="pomodoro-phase">${phaseLabel}</div>
-          <div id="pomodoro-time-display" class="pomodoro-time">${timeStr}</div>
-          <div class="pomodoro-counter">Session ${timer.sessionsCompleted % settings.sessionsBeforeLong + 1} of ${settings.sessionsBeforeLong}</div>
-        </div>
-      </div>
-      <div class="pomodoro-controls" style="margin-top: 2rem; display:flex; gap: 1rem;">
-        ${!timer.isRunning ? `<button class="btn-primary" onclick="startPomodoro()">Start</button>` : `<button class="btn-secondary" onclick="pausePomodoro()">Pause</button>`}
-        <button class="btn-secondary" onclick="resetPomodoro()">Reset</button>
-      </div>
-    </div>
-    
-    <div class="stat-cards-grid" style="margin-top: 2rem;">
-      <div class="stat-card">
-        <div class="stat-icon-wrapper blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
-        <div class="stat-content">
-          <div class="stat-label">Today's Focus</div>
-          <div class="stat-value">${data.pomodoro.todayFocusMinutes} min</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon-wrapper emerald"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div>
-        <div class="stat-content">
-          <div class="stat-label">Sessions Completed</div>
-          <div class="stat-value">${data.pomodoro.sessions.length}</div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-// Override renderAnalyticsView to include streaks
-const originalRenderAnalyticsView = renderAnalyticsView;
-renderAnalyticsView = function() {
-  const container = document.getElementById('view-analytics');
-  if (!container) return;
-  
-  const data = store.getState();
-  const streaks = data.streaks;
-  
-  let heatmapHTML = '<div class="streak-heatmap" style="display:grid; grid-template-rows: repeat(7, 1fr); grid-auto-flow: column; gap: 4px; overflow-x: auto; padding: 1rem 0;">';
-  const today = new Date();
-  for (let i = 84; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    const log = streaks.dailyLog[dateStr];
-    const intensity = log ? Math.min(4, Math.ceil((log.tasksCompleted + log.focusMinutes/10) / 2)) : 0;
-    heatmapHTML += `<div class="heatmap-cell intensity-${intensity}" title="${dateStr}: ${log ? log.tasksCompleted + ' tasks, ' + log.focusMinutes + ' min' : 'No activity'}"></div>`;
-  }
-  heatmapHTML += '</div>';
-  
-  const badges = [
-    { id: 'first_task', icon: '🚀', title: 'Getting Started' },
-    { id: 'streak_3', icon: '🔥', title: 'On a Roll' },
-    { id: 'streak_7', icon: '⚡', title: 'Weekly Warrior' },
-    { id: 'streak_30', icon: '👑', title: 'Monthly Master' },
-    { id: 'focus_60', icon: '🧠', title: 'Deep Focus' },
-    { id: 'tasks_10', icon: '✅', title: 'Task Crusher' },
-    { id: 'tasks_50', icon: '🌟', title: 'Half Century' }
-  ];
-  
-  let badgesHTML = '<div style="display:flex; gap: 1rem; flex-wrap: wrap;">';
-  badges.forEach(b => {
-    const unlocked = streaks.achievements.includes(b.id);
-    badgesHTML += `
-      <div class="streak-badge" style="opacity: ${unlocked ? '1' : '0.4'}; filter: ${unlocked ? 'none' : 'grayscale(1)'}; background: var(--bg-surface-hover); padding: 1rem; border-radius: var(--radius-md); text-align: center; width: 100px;">
-        <div style="font-size: 2rem;">${b.icon}</div>
-        <div style="font-size: 0.75rem; font-weight: bold; margin-top: 0.5rem;">${b.title}</div>
-      </div>
-    `;
-  });
-  badgesHTML += '</div>';
-
-  container.innerHTML = `
-    <div class="section-header">
-      <h2 class="section-title">Analytics & Streaks</h2>
-    </div>
-    
-    <div class="dashboard-grid">
-      <div class="card-panel">
-        <h3 style="margin-bottom: 1rem;">Study Streak 🔥</h3>
-        <div style="display:flex; justify-content: space-around; text-align: center;">
-          <div>
-            <div style="font-size: 2.5rem; font-weight: bold; color: var(--warning);">${streaks.currentStreak}</div>
-            <div style="font-size: 0.875rem; color: var(--text-secondary);">Current Streak</div>
-          </div>
-          <div>
-            <div style="font-size: 2.5rem; font-weight: bold; color: var(--text-primary);">${streaks.longestStreak}</div>
-            <div style="font-size: 0.875rem; color: var(--text-secondary);">Longest Streak</div>
-          </div>
-        </div>
-        
-        <div style="margin-top: 2rem;">
-          <div style="display:flex; justify-content: space-between; margin-bottom: 0.5rem;">
-            <span style="font-weight: bold;">Level ${streaks.level}</span>
-            <span style="color: var(--text-secondary);">${streaks.totalXP} / ${streaks.level * 500} XP</span>
-          </div>
-          <div class="xp-bar" style="height: 8px; background: var(--bg-surface-active); border-radius: 4px; overflow: hidden;">
-            <div style="height: 100%; width: ${(streaks.totalXP % 500) / 5}%; background: var(--accent);"></div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="card-panel">
-        <h3 style="margin-bottom: 1rem;">Activity Heatmap</h3>
-        ${heatmapHTML}
-      </div>
-    </div>
-    
-    <div class="card-panel" style="margin-top: 1.25rem;">
-      <h3 style="margin-bottom: 1rem;">Achievements</h3>
-      ${badgesHTML}
-    </div>
-  `;
-}
-
-// Hook into toggleAssignmentComplete
-const origToggleAssignmentComplete = store.toggleAssignmentComplete;
-store.toggleAssignmentComplete = function(id) {
-  origToggleAssignmentComplete.call(this, id);
-  const a = this.data.assignments.find(x => x.id === id);
-  if (a && a.status === 'completed') {
-    updateDailyStreak('task');
-    if (window.AcademiaProNative) window.AcademiaProNative.haptic('success');
-  }
-};
 
 
   </script>

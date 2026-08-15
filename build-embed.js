@@ -66,6 +66,13 @@ function buildEmbed() {
   // 4. Write output file
   fs.writeFileSync(OUTPUT_PATH, bundledHtml, 'utf8');
 
+  // 5. Also sync to iOS wrapper app if folder exists
+  const IOS_INDEX_PATH = path.join(ROOT_DIR, 'AcademiaPro-iOS', 'AcademiaPro', 'index.html');
+  if (fs.existsSync(path.dirname(IOS_INDEX_PATH))) {
+    fs.writeFileSync(IOS_INDEX_PATH, bundledHtml, 'utf8');
+    console.log(`  📱 Synced to iOS App: ${IOS_INDEX_PATH}`);
+  }
+
   const outputStats = fs.statSync(OUTPUT_PATH);
   const outputSizeKb = (outputStats.size / 1024).toFixed(2);
 

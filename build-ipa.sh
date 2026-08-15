@@ -6,6 +6,9 @@ cd "$(dirname "$0")"
 BUILD_DIR="ios-build"
 APP_DIR="$BUILD_DIR/Payload/AcademiaPro.app"
 
+echo "Building standalone web bundle..."
+node build-embed.js
+
 echo "Creating build directories..."
 mkdir -p "$APP_DIR"
 

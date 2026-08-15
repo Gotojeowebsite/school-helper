@@ -17,6 +17,9 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Build standalone web bundle
+        run: node build-embed.js
+
       - name: Copy web content
         run: cp academia_pro_embed.html AcademiaPro-iOS/AcademiaPro/index.html
 
