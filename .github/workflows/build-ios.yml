@@ -1,0 +1,60 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Copy web content
+        run: cp academia_pro_embed.html AcademiaPro-iOS/AcademiaPro/index.html
+
+      - name: Generate Xcode project
+        run: |
+          cd AcademiaPro-iOS
+          xcodegen generate
+
+      - name: Build the archive
+        run: |
+          cd AcademiaPro-iOS
+          xcodebuild -project AcademiaPro.xcodeproj \
+            -scheme AcademiaPro \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/AcademiaPro.xcarchive \
+            archive \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Package into IPA
+        run: |
+          cd AcademiaPro-iOS
+          mkdir -p Payload
+          cp -r build/AcademiaPro.xcarchive/Products/Applications/AcademiaPro.app Payload/
+          zip -r AcademiaPro.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AcademiaPro-IPA
+          path: AcademiaPro-iOS/AcademiaPro.ipa
+
+      - name: Release IPA on tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: AcademiaPro-iOS/AcademiaPro.ipa

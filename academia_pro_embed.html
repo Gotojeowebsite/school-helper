@@ -2145,6 +2145,69 @@ textarea.form-control {
 }
 
 
+/* Pomodoro Styles */
+.pomodoro-timer-ring {
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: background 0.5s linear;
+}
+
+.pomodoro-timer-inner {
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.pomodoro-time {
+  font-size: 4rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1;
+  margin: 0.5rem 0;
+}
+
+.pomodoro-phase {
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.pomodoro-counter {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Heatmap Styles */
+.heatmap-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--bg-surface-active);
+}
+.heatmap-cell.intensity-1 { background: #9be9a8; }
+.heatmap-cell.intensity-2 { background: #40c463; }
+.heatmap-cell.intensity-3 { background: #30a14e; }
+.heatmap-cell.intensity-4 { background: #216e39; }
+
+[data-theme="dark"] .heatmap-cell.intensity-1 { background: #0e4429; }
+[data-theme="dark"] .heatmap-cell.intensity-2 { background: #006d32; }
+[data-theme="dark"] .heatmap-cell.intensity-3 { background: #26a641; }
+[data-theme="dark"] .heatmap-cell.intensity-4 { background: #39d353; }
+
   </style>
 </head>
 <body>
@@ -2230,6 +2293,13 @@ textarea.form-control {
         </a>
 
         <div class="nav-section-title">Tools & Preferences</div>
+        <a href="#focus" class="nav-item" data-nav-target="focus">
+          <span class="nav-item-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </span>
+          <span>Focus Timer</span>
+        </a>
+
         <a href="#analytics" class="nav-item" data-nav-target="analytics">
           <span class="nav-item-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
@@ -2327,6 +2397,9 @@ textarea.form-control {
 
         <!-- View: Classes Directory -->
         <section id="view-classes" class="view-section"></section>
+
+        <!-- View: Focus Timer -->
+        <section id="view-focus" class="view-section"></section>
 
         <!-- View: Analytics -->
         <section id="view-analytics" class="view-section"></section>
@@ -2491,7 +2564,29 @@ textarea.form-control {
       classes: [],       // COMPLETELY EMPTY FOR NEW USERS
       schedule: [],      // COMPLETELY EMPTY FOR NEW USERS
       assignments: [],   // COMPLETELY EMPTY FOR NEW USERS
-      exams: []          // COMPLETELY EMPTY FOR NEW USERS
+      exams: [],         // COMPLETELY EMPTY FOR NEW USERS
+      pomodoro: {
+        sessions: [],
+        settings: {
+          workDuration: 25,
+          shortBreak: 5,
+          longBreak: 15,
+          sessionsBeforeLong: 4,
+          autoStartBreaks: false,
+          autoStartWork: false
+        },
+        totalFocusMinutes: 0,
+        todayFocusMinutes: 0
+      },
+      streaks: {
+        currentStreak: 0,
+        longestStreak: 0,
+        lastActiveDate: null,
+        totalXP: 0,
+        level: 1,
+        achievements: [],
+        dailyLog: {}
+      }
     };
   }
 
@@ -3118,6 +3213,8 @@ textarea.form-control {
       if (!Array.isArray(data.schedule)) data.schedule = [];
       if (!Array.isArray(data.assignments)) data.assignments = [];
       if (!Array.isArray(data.exams)) data.exams = [];
+      if (!data.pomodoro) data.pomodoro = { sessions: [], settings: { workDuration: 25, shortBreak: 5, longBreak: 15, sessionsBeforeLong: 4, autoStartBreaks: false, autoStartWork: false }, totalFocusMinutes: 0, todayFocusMinutes: 0 };
+      if (!data.streaks) data.streaks = { currentStreak: 0, longestStreak: 0, lastActiveDate: null, totalXP: 0, level: 1, achievements: [], dailyLog: {} };
       return data;
     }
 
@@ -3566,6 +3663,16 @@ textarea.form-control {
       examStatus: 'upcoming',
       scheduleDayFilter: 'all'
     },
+    pomodoroTimer: {
+      isRunning: false,
+      isPaused: false,
+      timeRemaining: 25 * 60,
+      currentPhase: 'work',
+      sessionsCompleted: 0,
+      intervalId: null,
+      linkedClassId: null,
+      linkedAssignmentId: null
+    },
     modalContext: null
   };
 
@@ -3806,6 +3913,7 @@ textarea.form-control {
       case 'schedule': renderScheduleView(); break;
       case 'grades': renderGradesView(); break;
       case 'classes': renderClassesView(); break;
+      case 'focus': renderFocusTimerView(); break;
       case 'analytics': renderAnalyticsView(); break;
       case 'settings': renderSettingsView(); break;
       default: renderDashboardView(); break;
@@ -6304,6 +6412,328 @@ textarea.form-control {
   }
 
 })();
+
+// --- POMODORO TIMER LOGIC ---
+function startPomodoro() {
+  if (state.pomodoroTimer.isRunning) return;
+  state.pomodoroTimer.isRunning = true;
+  state.pomodoroTimer.isPaused = false;
+  state.pomodoroTimer.intervalId = setInterval(tickPomodoro, 1000);
+  if (state.currentView === 'focus') renderFocusTimerView();
+}
+
+function pausePomodoro() {
+  if (!state.pomodoroTimer.isRunning) return;
+  clearInterval(state.pomodoroTimer.intervalId);
+  state.pomodoroTimer.isRunning = false;
+  state.pomodoroTimer.isPaused = true;
+  if (state.currentView === 'focus') renderFocusTimerView();
+}
+
+function resetPomodoro() {
+  clearInterval(state.pomodoroTimer.intervalId);
+  const settings = store.getState().pomodoro.settings;
+  state.pomodoroTimer.isRunning = false;
+  state.pomodoroTimer.isPaused = false;
+  state.pomodoroTimer.currentPhase = 'work';
+  state.pomodoroTimer.timeRemaining = settings.workDuration * 60;
+  if (state.currentView === 'focus') renderFocusTimerView();
+}
+
+function tickPomodoro() {
+  if (state.pomodoroTimer.timeRemaining > 0) {
+    state.pomodoroTimer.timeRemaining--;
+    if (state.currentView === 'focus') {
+      const timeDisplay = document.getElementById('pomodoro-time-display');
+      if (timeDisplay) {
+        const mins = Math.floor(state.pomodoroTimer.timeRemaining / 60);
+        const secs = state.pomodoroTimer.timeRemaining % 60;
+        timeDisplay.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        
+        const settings = store.getState().pomodoro.settings;
+        let total = settings.workDuration * 60;
+        if (state.pomodoroTimer.currentPhase === 'shortBreak') total = settings.shortBreak * 60;
+        if (state.pomodoroTimer.currentPhase === 'longBreak') total = settings.longBreak * 60;
+        
+        const progress = ((total - state.pomodoroTimer.timeRemaining) / total) * 100;
+        const ring = document.getElementById('pomodoro-ring');
+        if (ring) ring.style.background = `conic-gradient(var(--accent) ${progress}%, var(--bg-surface-hover) ${progress}%)`;
+      }
+    }
+    
+    if (state.pomodoroTimer.timeRemaining === 0 && window.AcademiaProNative) {
+      window.AcademiaProNative.haptic('warning');
+    }
+  } else {
+    completePomodoroPhase();
+  }
+}
+
+function completePomodoroPhase() {
+  clearInterval(state.pomodoroTimer.intervalId);
+  const data = store.getState();
+  const settings = data.pomodoro.settings;
+  
+  if (state.pomodoroTimer.currentPhase === 'work') {
+    state.pomodoroTimer.sessionsCompleted++;
+    data.pomodoro.totalFocusMinutes += settings.workDuration;
+    data.pomodoro.todayFocusMinutes += settings.workDuration;
+    
+    data.pomodoro.sessions.push({
+      id: 'pom-' + Date.now(),
+      startTime: new Date(Date.now() - settings.workDuration * 60000).toISOString(),
+      endTime: new Date().toISOString(),
+      duration: settings.workDuration,
+      type: 'work',
+      completed: true
+    });
+    
+    updateDailyStreak('pomodoro');
+    
+    if (window.AcademiaProNative) {
+      window.AcademiaProNative.scheduleNotification('Focus session complete! Time for a break.', new Date(Date.now() + 1000));
+    }
+    
+    if (state.pomodoroTimer.sessionsCompleted % settings.sessionsBeforeLong === 0) {
+      state.pomodoroTimer.currentPhase = 'longBreak';
+      state.pomodoroTimer.timeRemaining = settings.longBreak * 60;
+    } else {
+      state.pomodoroTimer.currentPhase = 'shortBreak';
+      state.pomodoroTimer.timeRemaining = settings.shortBreak * 60;
+    }
+  } else {
+    state.pomodoroTimer.currentPhase = 'work';
+    state.pomodoroTimer.timeRemaining = settings.workDuration * 60;
+  }
+  
+  state.pomodoroTimer.isRunning = false;
+  state.pomodoroTimer.isPaused = false;
+  store.notify('pomodoro_update');
+  if (state.currentView === 'focus') renderFocusTimerView();
+}
+
+function updateDailyStreak(type = 'task') {
+  const data = store.getState();
+  const today = new Date().toISOString().split('T')[0];
+  
+  if (!data.streaks.dailyLog[today]) {
+    data.streaks.dailyLog[today] = { tasksCompleted: 0, focusMinutes: 0, xpEarned: 0 };
+    
+    // Check if yesterday was active
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    if (data.streaks.lastActiveDate === yesterday) {
+      data.streaks.currentStreak++;
+      if (data.streaks.currentStreak > data.streaks.longestStreak) {
+        data.streaks.longestStreak = data.streaks.currentStreak;
+      }
+    } else if (data.streaks.lastActiveDate !== today) {
+      data.streaks.currentStreak = 1;
+    }
+    data.streaks.lastActiveDate = today;
+  }
+  
+  let xpGain = 0;
+  if (type === 'task') {
+    data.streaks.dailyLog[today].tasksCompleted++;
+    xpGain = 10;
+  } else if (type === 'pomodoro') {
+    data.streaks.dailyLog[today].focusMinutes += data.pomodoro.settings.workDuration;
+    xpGain = 5;
+  }
+  
+  data.streaks.dailyLog[today].xpEarned += xpGain;
+  data.streaks.totalXP += xpGain;
+  
+  // Level up logic
+  const newLevel = Math.floor(data.streaks.totalXP / 500) + 1;
+  if (newLevel > data.streaks.level) {
+    data.streaks.level = newLevel;
+    showToast(`Level Up! You are now Level ${newLevel} 🎉`, 'success');
+  }
+  
+  checkAchievements();
+  store.notify('streak_update');
+}
+
+function checkAchievements() {
+  const data = store.getState();
+  const a = data.streaks.achievements;
+  const today = new Date().toISOString().split('T')[0];
+  const log = data.streaks.dailyLog[today] || {tasksCompleted:0, focusMinutes:0};
+  
+  const unlock = (id, title) => {
+    if (!a.includes(id)) {
+      a.push(id);
+      showToast(`Achievement Unlocked: ${title} 🏆`, 'success');
+      if (window.AcademiaProNative) window.AcademiaProNative.haptic('success');
+    }
+  };
+  
+  if (data.streaks.totalXP > 0) unlock('first_task', 'Getting Started');
+  if (data.streaks.currentStreak >= 3) unlock('streak_3', 'On a Roll');
+  if (data.streaks.currentStreak >= 7) unlock('streak_7', 'Weekly Warrior');
+  if (data.streaks.currentStreak >= 30) unlock('streak_30', 'Monthly Master');
+  if (log.focusMinutes >= 60) unlock('focus_60', 'Deep Focus');
+  
+  let totalTasks = 0;
+  for (let date in data.streaks.dailyLog) totalTasks += data.streaks.dailyLog[date].tasksCompleted;
+  if (totalTasks >= 10) unlock('tasks_10', 'Task Crusher');
+  if (totalTasks >= 50) unlock('tasks_50', 'Half Century');
+}
+
+function renderFocusTimerView() {
+  const container = document.getElementById('view-focus');
+  if (!container) return;
+  
+  const data = store.getState();
+  const settings = data.pomodoro.settings;
+  const timer = state.pomodoroTimer;
+  
+  const mins = Math.floor(timer.timeRemaining / 60);
+  const secs = timer.timeRemaining % 60;
+  const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  
+  let total = settings.workDuration * 60;
+  if (timer.currentPhase === 'shortBreak') total = settings.shortBreak * 60;
+  if (timer.currentPhase === 'longBreak') total = settings.longBreak * 60;
+  const progress = ((total - timer.timeRemaining) / total) * 100;
+  
+  const phaseLabel = timer.currentPhase === 'work' ? 'Focus Session' : (timer.currentPhase === 'shortBreak' ? 'Short Break' : 'Long Break');
+  
+  container.innerHTML = `
+    <div class="section-header">
+      <h2 class="section-title">Focus Timer</h2>
+    </div>
+    <div class="card-panel" style="display:flex; flex-direction:column; align-items:center; padding: 3rem 1rem;">
+      <div id="pomodoro-ring" class="pomodoro-timer-ring" style="background: conic-gradient(var(--accent) ${progress}%, var(--bg-surface-hover) ${progress}%);">
+        <div class="pomodoro-timer-inner">
+          <div class="pomodoro-phase">${phaseLabel}</div>
+          <div id="pomodoro-time-display" class="pomodoro-time">${timeStr}</div>
+          <div class="pomodoro-counter">Session ${timer.sessionsCompleted % settings.sessionsBeforeLong + 1} of ${settings.sessionsBeforeLong}</div>
+        </div>
+      </div>
+      <div class="pomodoro-controls" style="margin-top: 2rem; display:flex; gap: 1rem;">
+        ${!timer.isRunning ? `<button class="btn-primary" onclick="startPomodoro()">Start</button>` : `<button class="btn-secondary" onclick="pausePomodoro()">Pause</button>`}
+        <button class="btn-secondary" onclick="resetPomodoro()">Reset</button>
+      </div>
+    </div>
+    
+    <div class="stat-cards-grid" style="margin-top: 2rem;">
+      <div class="stat-card">
+        <div class="stat-icon-wrapper blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
+        <div class="stat-content">
+          <div class="stat-label">Today's Focus</div>
+          <div class="stat-value">${data.pomodoro.todayFocusMinutes} min</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon-wrapper emerald"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div>
+        <div class="stat-content">
+          <div class="stat-label">Sessions Completed</div>
+          <div class="stat-value">${data.pomodoro.sessions.length}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Override renderAnalyticsView to include streaks
+const originalRenderAnalyticsView = renderAnalyticsView;
+renderAnalyticsView = function() {
+  const container = document.getElementById('view-analytics');
+  if (!container) return;
+  
+  const data = store.getState();
+  const streaks = data.streaks;
+  
+  let heatmapHTML = '<div class="streak-heatmap" style="display:grid; grid-template-rows: repeat(7, 1fr); grid-auto-flow: column; gap: 4px; overflow-x: auto; padding: 1rem 0;">';
+  const today = new Date();
+  for (let i = 84; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const log = streaks.dailyLog[dateStr];
+    const intensity = log ? Math.min(4, Math.ceil((log.tasksCompleted + log.focusMinutes/10) / 2)) : 0;
+    heatmapHTML += `<div class="heatmap-cell intensity-${intensity}" title="${dateStr}: ${log ? log.tasksCompleted + ' tasks, ' + log.focusMinutes + ' min' : 'No activity'}"></div>`;
+  }
+  heatmapHTML += '</div>';
+  
+  const badges = [
+    { id: 'first_task', icon: '🚀', title: 'Getting Started' },
+    { id: 'streak_3', icon: '🔥', title: 'On a Roll' },
+    { id: 'streak_7', icon: '⚡', title: 'Weekly Warrior' },
+    { id: 'streak_30', icon: '👑', title: 'Monthly Master' },
+    { id: 'focus_60', icon: '🧠', title: 'Deep Focus' },
+    { id: 'tasks_10', icon: '✅', title: 'Task Crusher' },
+    { id: 'tasks_50', icon: '🌟', title: 'Half Century' }
+  ];
+  
+  let badgesHTML = '<div style="display:flex; gap: 1rem; flex-wrap: wrap;">';
+  badges.forEach(b => {
+    const unlocked = streaks.achievements.includes(b.id);
+    badgesHTML += `
+      <div class="streak-badge" style="opacity: ${unlocked ? '1' : '0.4'}; filter: ${unlocked ? 'none' : 'grayscale(1)'}; background: var(--bg-surface-hover); padding: 1rem; border-radius: var(--radius-md); text-align: center; width: 100px;">
+        <div style="font-size: 2rem;">${b.icon}</div>
+        <div style="font-size: 0.75rem; font-weight: bold; margin-top: 0.5rem;">${b.title}</div>
+      </div>
+    `;
+  });
+  badgesHTML += '</div>';
+
+  container.innerHTML = `
+    <div class="section-header">
+      <h2 class="section-title">Analytics & Streaks</h2>
+    </div>
+    
+    <div class="dashboard-grid">
+      <div class="card-panel">
+        <h3 style="margin-bottom: 1rem;">Study Streak 🔥</h3>
+        <div style="display:flex; justify-content: space-around; text-align: center;">
+          <div>
+            <div style="font-size: 2.5rem; font-weight: bold; color: var(--warning);">${streaks.currentStreak}</div>
+            <div style="font-size: 0.875rem; color: var(--text-secondary);">Current Streak</div>
+          </div>
+          <div>
+            <div style="font-size: 2.5rem; font-weight: bold; color: var(--text-primary);">${streaks.longestStreak}</div>
+            <div style="font-size: 0.875rem; color: var(--text-secondary);">Longest Streak</div>
+          </div>
+        </div>
+        
+        <div style="margin-top: 2rem;">
+          <div style="display:flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span style="font-weight: bold;">Level ${streaks.level}</span>
+            <span style="color: var(--text-secondary);">${streaks.totalXP} / ${streaks.level * 500} XP</span>
+          </div>
+          <div class="xp-bar" style="height: 8px; background: var(--bg-surface-active); border-radius: 4px; overflow: hidden;">
+            <div style="height: 100%; width: ${(streaks.totalXP % 500) / 5}%; background: var(--accent);"></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card-panel">
+        <h3 style="margin-bottom: 1rem;">Activity Heatmap</h3>
+        ${heatmapHTML}
+      </div>
+    </div>
+    
+    <div class="card-panel" style="margin-top: 1.25rem;">
+      <h3 style="margin-bottom: 1rem;">Achievements</h3>
+      ${badgesHTML}
+    </div>
+  `;
+}
+
+// Hook into toggleAssignmentComplete
+const origToggleAssignmentComplete = store.toggleAssignmentComplete;
+store.toggleAssignmentComplete = function(id) {
+  origToggleAssignmentComplete.call(this, id);
+  const a = this.data.assignments.find(x => x.id === id);
+  if (a && a.status === 'completed') {
+    updateDailyStreak('task');
+    if (window.AcademiaProNative) window.AcademiaProNative.haptic('success');
+  }
+};
+
 
   </script>
 </body>

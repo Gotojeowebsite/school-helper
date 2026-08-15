@@ -1,0 +1,17 @@
+name: AcademiaPro
+options:
+  bundleIdPrefix: com.academiapro
+targets:
+  AcademiaPro:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - AcademiaPro
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.academiapro.app
+      INFOPLIST_FILE: AcademiaPro/Info.plist
+      CODE_SIGN_IDENTITY: ""
+      CODE_SIGNING_REQUIRED: "NO"
+      CODE_SIGNING_ALLOWED: "NO"
+      TARGETED_DEVICE_FAMILY: "1,2"
