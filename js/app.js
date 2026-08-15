@@ -2812,6 +2812,25 @@
           </div>
         </div>
 
+        <!-- PowerSchool Grade Import -->
+        <div class="card-panel">
+          <h3 class="panel-title" style="margin-bottom:0.5rem;">📋 Import & Sync PowerSchool</h3>
+          <p style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:1rem;">
+            Import your classes and grades from HISD PowerSchool, use the 1-click bookmarklet, or enable scheduled background auto-sync.
+          </p>
+          <div style="display:flex; flex-wrap:wrap; gap:0.625rem; margin-bottom:0;">
+            <button class="btn-secondary" id="btn-ps-import-paste">
+              📋 Paste PowerSchool Grades
+            </button>
+            <button class="btn-secondary" id="btn-ps-bookmarklet-info">
+              🔖 Get Bookmarklet
+            </button>
+            <button class="btn-secondary" id="btn-ps-auto-sync-info" style="color:var(--accent-primary); border-color:var(--accent-primary);">
+              🤖 Setup Automatic Cloud Sync
+            </button>
+          </div>
+        </div>
+
         <!-- Sample Data & Reset -->
         <div class="card-panel">
           <h3 class="panel-title" style="margin-bottom:0.5rem;">Demo Data & Reset</h3>
@@ -2903,6 +2922,10 @@
         renderSettingsView();
       }
     });
+
+    container.querySelector('#btn-ps-import-paste')?.addEventListener('click', () => openPowerSchoolImportModal());
+    container.querySelector('#btn-ps-bookmarklet-info')?.addEventListener('click', () => openPowerSchoolBookmarkletModal());
+    container.querySelector('#btn-ps-auto-sync-info')?.addEventListener('click', () => openPowerSchoolAutoSyncModal());
   }
 
   // --- MODALS ENGINE ---
@@ -3916,6 +3939,1027 @@
     if (elements.headerNotificationDot) {
       elements.headerNotificationDot.style.display = overdue > 0 ? 'block' : 'none';
     }
+  }
+
+  // --- POWERSCHOOL GRADE IMPORT SYSTEM ---
+
+  /**
+   * Upgraded PowerSchool bookmarklet JavaScript that scrapes course name, period,
+   * teacher, room, grades, and student name directly from the PowerSchool DOM.
+   */
+  const PS_BOOKMARKLET_CODE = "javascript:void(function(){try{var classes=[];var studentName='';var wel=document.querySelector('#user-greeting,#welcome-text,.user-greeting,.username,#branding-student-name,.student-name,h1,h2');if(wel){var wm=wel.textContent.match(/Welcome,\\s+([A-Za-z\\s]+?)(?:\\s+Help|\\s+Sign Out|\\n|$)/i)||wel.textContent.match(/Grades and Attendance:\\s*([A-Za-z]+,\\s*[A-Za-z\\s]+)/i);if(wm){studentName=wm[1].trim()}}var rows=document.querySelectorAll('table.linkDescList tr.highlight,table.linkDescList tr,#quickLookup table tr,table[border] tr,.box-round table tr,#grades-table tr,.data-table tr,#content-main table tr');if(!rows.length){rows=document.querySelectorAll('tr');}var seen={};rows.forEach(function(row){var cells=row.querySelectorAll('td');if(cells.length<3)return;var period='';var name='';var grade=null;var teacher='';var room='';var c0=cells[0]?cells[0].textContent.trim():'';if(c0.match(/^\\d+(\\([A-Za-z0-9]+\\))?/)){period=c0}for(var i=0;i<cells.length;i++){var txt=cells[i].textContent.trim();if(!name&&txt.length>2&&!/^\\d+$/.test(txt)&&!txt.match(/^[A-F][+-]?$/)&&!txt.match(/^\\d+\\.?\\d*%?$/)&&!txt.includes('Not available')&&txt!=='[ i ]'&&txt!=='.'){name=txt}var gm=txt.match(/(\\d{1,3}(?:\\.\\d+)?)\\s*%/);if(gm&&grade===null){grade=parseFloat(gm[1])}else if(grade===null&&/^\\d{1,3}(\\.\\d+)?$/.test(txt)&&parseFloat(txt)>=0&&parseFloat(txt)<=150&&txt!==room&&!txt.match(/^\\d{4}$/)){grade=parseFloat(txt)}if(!teacher){var tm=txt.match(/Email\\s+([A-Za-z\\s,.\\-0-9]+?)(?:\\r?\\n|\\t|- Rm|$)/i);if(tm)teacher=tm[1].trim()}if(!room){var rm=txt.match(/Rm:\\s*(\\d+[A-Za-z]?|[A-Za-z0-9\\-]+)/i);if(rm)room=rm[1].trim()}}if(name&&!seen[name]){seen[name]=1;classes.push({className:name,period:period,teacher:teacher,room:room,gradePercent:grade,gradeLetter:null});}});var result=JSON.stringify({source:'powerschool',version:1,studentName:studentName,exportedAt:new Date().toISOString(),classes:classes},null,2);if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(result).then(function(){alert('AcademiaPro: '+classes.length+' classes copied to clipboard!\\nGo to AcademiaPro Settings > Import from PowerSchool > Paste.')}).catch(function(){prompt('Copy this JSON manually:',result)})}else{prompt('Copy this JSON manually:',result)}}catch(e){alert('PowerSchool scraper error: '+e.message)}})();";
+
+  function cleanCourseName(rawName) {
+    if (!rawName) return '';
+    return rawName
+      .replace(/^[\d\s()A-Za-z]+[-:]\s*/, '')
+      .replace(/Email.*$/i, '')
+      .replace(/-\s*Rm:.*$/i, '')
+      .replace(/\s*\.\s*$/, '')
+      .trim();
+  }
+
+  function findBestMatchingClass(psName, existingList) {
+    if (!existingList || !existingList.length) return null;
+    const clean = psName.toLowerCase().replace(/[^a-z0-9]/g, ' ');
+    const tokens = clean.split(/\s+/).filter(t => t.length > 2 && t !== 'preap' && t !== 'dch' && t !== 'stdy');
+
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const cls of existingList) {
+      const existingClean = cls.name.toLowerCase().replace(/[^a-z0-9]/g, ' ');
+      const existingTokens = existingClean.split(/\s+/).filter(t => t.length > 2);
+
+      if (existingClean === clean || existingClean.includes(clean) || clean.includes(existingClean)) {
+        return cls;
+      }
+
+      let score = 0;
+      for (const t of tokens) {
+        if (existingTokens.includes(t) || existingClean.includes(t)) {
+          score += 2;
+        }
+      }
+      if (score > bestScore && score >= 2) {
+        bestScore = score;
+        bestMatch = cls;
+      }
+    }
+
+    return bestMatch;
+  }
+
+  function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  function openPowerSchoolAutoSyncModal() {
+    const fbState = typeof FirebaseSyncService !== 'undefined' ? FirebaseSyncService.getStatus() : null;
+    const isAuthenticated = fbState && fbState.isAuthenticated;
+    const user = fbState && fbState.user;
+
+    const data = store.getState();
+    const settings = data.settings || {};
+    const psConfig = settings.psAutoSync || {};
+    const hasConfig = !!(psConfig.username);
+
+    const defaultApiUrl = settings.psBackendUrl || 'https://academiapro-sync-api.onrender.com';
+
+    const html = `
+      <div class="modal-panel" style="max-width:660px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+          <h2 style="font-size:1.125rem; font-weight:700; color:var(--text-primary);">⚡ Multi-User Automatic Grade Sync</h2>
+          <button id="modal-close" class="modal-close-btn">&times;</button>
+        </div>
+
+        <div style="display:flex; border-bottom:1px solid var(--border-default); margin-bottom:1rem; gap:0.5rem;">
+          <button class="btn-secondary" id="tab-btn-student-sync" style="border-bottom:2px solid var(--accent-primary); font-weight:600; font-size:0.8125rem; border-radius:0; border-top:none; border-left:none; border-right:none; padding:0.5rem 0.75rem;">
+            👤 Student Cloud Auto-Sync
+          </button>
+          <button class="btn-secondary" id="tab-btn-deploy-server" style="font-size:0.8125rem; border-radius:0; border:none; padding:0.5rem 0.75rem; color:var(--text-secondary);">
+            ☁️ Free Backend Deployment Guide
+          </button>
+        </div>
+
+        <!-- TAB 1: Student Cloud Auto-Sync -->
+        <div id="tab-content-student-sync">
+          ${!isAuthenticated ? `
+            <div style="padding:1rem; background:rgba(79, 70, 229, 0.08); border:1px solid rgba(79, 70, 229, 0.25); border-radius:var(--radius-md); margin-bottom:1rem; font-size:0.8125rem;">
+              <div style="font-weight:700; color:var(--text-primary); margin-bottom:0.375rem;">☁️ Cloud Account Required for Auto-Sync</div>
+              <p style="color:var(--text-secondary); margin-bottom:0.75rem;">
+                To enable automatic background grade updates across all your devices and browsers, sign into your free AcademiaPro cloud account first.
+              </p>
+              <button class="btn-primary" id="btn-open-cloud-account-link" style="font-size:0.8125rem;">
+                Sign In / Create Free Account
+              </button>
+            </div>
+          ` : `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:0.75rem; background:var(--bg-surface-subtle); border-radius:var(--radius-sm); border:1px solid var(--border-default); margin-bottom:1rem; font-size:0.8125rem;">
+              <div>
+                <span style="color:var(--text-secondary);">Connected Account: </span>
+                <strong style="color:var(--text-primary);">${user.email}</strong>
+              </div>
+              <span class="cloud-status-badge ${hasConfig && psConfig.enabled ? 'connected' : ''}">
+                ${hasConfig && psConfig.enabled ? '🟢 Auto-Sync ON' : '⚪ Not Active'}
+              </span>
+            </div>
+
+            <div style="margin-bottom:1rem;">
+              <label style="display:block; font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:0.375rem;">
+                PowerSchool Student Username / ID
+              </label>
+              <input type="text" id="input-ps-sync-username" class="modal-input" placeholder="e.g. your student ID number" value="${escapeHTML(psConfig.username || '')}" style="width:100%; margin-bottom:0.75rem;" />
+
+              <label style="display:block; font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:0.375rem;">
+                PowerSchool Password
+              </label>
+              <input type="password" id="input-ps-sync-password" class="modal-input" placeholder="Your PowerSchool password" style="width:100%; margin-bottom:0.75rem;" />
+
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-size:0.8125rem;">
+                  <input type="checkbox" id="check-enable-autosync" ${psConfig.enabled !== false ? 'checked' : ''} style="accent-color:var(--accent-primary); width:16px; height:16px;" />
+                  <span>Enable daily background auto-sync</span>
+                </label>
+
+                <button id="btn-toggle-advanced-api" style="background:none; border:none; color:var(--accent-primary); font-size:0.75rem; cursor:pointer; text-decoration:underline;">
+                  Advanced Server URL
+                </button>
+              </div>
+
+              <div id="ps-advanced-api-row" style="display:none; margin-bottom:1rem;">
+                <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--text-tertiary); margin-bottom:0.25rem;">Backend Server URL</label>
+                <input type="text" id="input-ps-backend-url" class="modal-input" value="${escapeHTML(defaultApiUrl)}" style="width:100%; font-size:0.75rem;" />
+              </div>
+            </div>
+
+            <div style="display:flex; gap:0.625rem; flex-wrap:wrap; justify-content:flex-end; margin-bottom:1rem;">
+              ${hasConfig ? `
+                <button class="btn-secondary" id="btn-trigger-cloud-sync-now" style="font-size:0.8125rem;">
+                  🔄 Sync Grades Right Now
+                </button>
+                <button class="btn-secondary" id="btn-disable-autosync" style="color:var(--danger); border-color:var(--danger-border); font-size:0.8125rem;">
+                  🗑️ Turn Off
+                </button>
+              ` : ''}
+              <button class="btn-primary" id="btn-save-cloud-sync" style="font-size:0.8125rem;">
+                💾 Save & Activate Cloud Sync
+              </button>
+            </div>
+
+            <div style="padding:0.75rem; background:var(--bg-surface-subtle); border-radius:var(--radius-sm); border:1px solid var(--border-default); font-size:0.75rem; color:var(--text-tertiary); line-height:1.5;">
+              🔒 <strong>AES-256 Cloud Encryption:</strong> Your PowerSchool login is encrypted before saving. It is only used by the automated scraper to fetch your academic grades and updates your Gradebook seamlessly.
+            </div>
+          `}
+        </div>
+
+        <!-- TAB 2: Free Backend Deployment Guide -->
+        <div id="tab-content-deploy-server" style="display:none; font-size:0.8125rem; color:var(--text-secondary); line-height:1.6;">
+          <p style="margin-bottom:0.75rem;">
+            A complete <strong>FastAPI + Playwright Docker backend</strong> is included in this repository under <code>server/</code> and <code>render.yaml</code>.
+          </p>
+
+          <h3 style="font-size:0.875rem; font-weight:700; color:var(--text-primary); margin-top:0.75rem; margin-bottom:0.375rem;">🚀 1-Click Free Hosting on Render:</h3>
+          <ol style="padding-left:1.25rem; margin-bottom:1rem;">
+            <li style="margin-bottom:0.375rem;">Sign up at <a href="https://render.com" target="_blank" rel="noopener" style="color:var(--accent-primary); font-weight:600;">Render.com</a> (100% Free).</li>
+            <li style="margin-bottom:0.375rem;">Click <strong>New +</strong> &rarr; <strong>Blueprint</strong> &rarr; Connect this GitHub repo.</li>
+            <li style="margin-bottom:0.375rem;">Render will automatically detect <code>render.yaml</code> and launch your private scraper on the Free plan ($0/mo).</li>
+            <li style="margin-bottom:0.375rem;">Copy your Render URL (e.g. <code>https://your-api.onrender.com</code>) into the Advanced Server URL field!</li>
+          </ol>
+
+          <h3 style="font-size:0.875rem; font-weight:700; color:var(--text-primary); margin-top:0.75rem; margin-bottom:0.375rem;">⏰ Free Scheduled Cron (cron-job.org / GitHub Actions):</h3>
+          <p style="margin-bottom:0.75rem;">
+            Set up a free trigger on <a href="https://cron-job.org" target="_blank" rel="noopener" style="color:var(--accent-primary); font-weight:600;">cron-job.org</a> to POST to <code>https://your-api.onrender.com/api/sync-all-scheduled</code> twice a day. It will automatically update every single registered student!
+          </p>
+        </div>
+      </div>
+    `;
+
+    openModalHTML(html, dialog => {
+      const tabStudent = dialog.querySelector('#tab-btn-student-sync');
+      const tabDeploy = dialog.querySelector('#tab-btn-deploy-server');
+      const contentStudent = dialog.querySelector('#tab-content-student-sync');
+      const contentDeploy = dialog.querySelector('#tab-content-deploy-server');
+
+      tabStudent?.addEventListener('click', () => {
+        tabStudent.style.borderBottom = '2px solid var(--accent-primary)';
+        tabStudent.style.fontWeight = '600';
+        tabDeploy.style.borderBottom = 'none';
+        tabDeploy.style.fontWeight = 'normal';
+        contentStudent.style.display = 'block';
+        contentDeploy.style.display = 'none';
+      });
+
+      tabDeploy?.addEventListener('click', () => {
+        tabDeploy.style.borderBottom = '2px solid var(--accent-primary)';
+        tabDeploy.style.fontWeight = '600';
+        tabStudent.style.borderBottom = 'none';
+        tabStudent.style.fontWeight = 'normal';
+        contentStudent.style.display = 'none';
+        contentDeploy.style.display = 'block';
+      });
+
+      dialog.querySelector('#btn-open-cloud-account-link')?.addEventListener('click', () => {
+        closeModal();
+        openAccountSyncModal('signup');
+      });
+
+      const advToggle = dialog.querySelector('#btn-toggle-advanced-api');
+      const advRow = dialog.querySelector('#ps-advanced-api-row');
+      advToggle?.addEventListener('click', () => {
+        if (advRow) advRow.style.display = advRow.style.display === 'none' ? 'block' : 'none';
+      });
+
+      dialog.querySelector('#btn-save-cloud-sync')?.addEventListener('click', async () => {
+        const username = dialog.querySelector('#input-ps-sync-username')?.value.trim();
+        const password = dialog.querySelector('#input-ps-sync-password')?.value;
+        const enabled = dialog.querySelector('#check-enable-autosync')?.checked ?? true;
+        const backendUrl = dialog.querySelector('#input-ps-backend-url')?.value.trim() || defaultApiUrl;
+
+        if (!username) {
+          showToast('Please enter your PowerSchool username / student ID', 'danger');
+          return;
+        }
+        if (!password && !hasConfig) {
+          showToast('Please enter your PowerSchool password', 'danger');
+          return;
+        }
+
+        try {
+          const fbAuth = firebase.auth();
+          const currentUser = fbAuth.currentUser;
+          if (!currentUser) throw new Error('Please sign into your Cloud account first');
+
+          const token = await currentUser.getIdToken();
+
+          showToast('Connecting to Cloud Sync Backend...', 'info');
+
+          // Send to backend API to encrypt and store
+          const resp = await fetch(`${backendUrl.rstrip('/')}/api/save-credentials`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              idToken: token,
+              psUsername: username,
+              psPassword: password || '',
+              autoSyncEnabled: enabled
+            })
+          });
+
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || `Server error ${resp.status}`);
+          }
+
+          // Save local settings reference
+          store.updateSettings({
+            psBackendUrl: backendUrl,
+            psAutoSync: {
+              enabled: enabled,
+              username: username,
+              lastSaved: new Date().toISOString()
+            }
+          });
+
+          showToast('PowerSchool Cloud Auto-Sync activated!', 'success');
+          closeModal();
+          renderSettingsView();
+        } catch (e) {
+          console.error(e);
+          // Fallback: save locally in store settings
+          store.updateSettings({
+            psBackendUrl: backendUrl,
+            psAutoSync: {
+              enabled: enabled,
+              username: username,
+              lastSaved: new Date().toISOString()
+            }
+          });
+          showToast('Settings saved! Note: ' + e.message, 'warning');
+          closeModal();
+        }
+      });
+
+      dialog.querySelector('#btn-trigger-cloud-sync-now')?.addEventListener('click', async () => {
+        const backendUrl = dialog.querySelector('#input-ps-backend-url')?.value.trim() || defaultApiUrl;
+        try {
+          const fbAuth = firebase.auth();
+          const currentUser = fbAuth.currentUser;
+          if (!currentUser) throw new Error('Please sign in first');
+
+          const token = await currentUser.getIdToken();
+          showToast('Scraping latest PowerSchool grades in cloud...', 'info');
+
+          const resp = await fetch(`${backendUrl.rstrip('/')}/api/sync-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken: token })
+          });
+
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || `Server error ${resp.status}`);
+          }
+
+          const result = await resp.json();
+          showToast(result.message || 'Grades updated from PowerSchool!', 'success');
+          closeModal();
+          navigateTo('gradebook');
+        } catch (e) {
+          showToast('Cloud sync failed: ' + e.message, 'danger');
+        }
+      });
+
+      dialog.querySelector('#btn-disable-autosync')?.addEventListener('click', async () => {
+        if (!confirm('Disable automatic PowerSchool cloud sync and remove stored credentials?')) return;
+        try {
+          const backendUrl = dialog.querySelector('#input-ps-backend-url')?.value.trim() || defaultApiUrl;
+          const fbAuth = firebase.auth();
+          const currentUser = fbAuth.currentUser;
+          if (currentUser) {
+            const token = await currentUser.getIdToken();
+            await fetch(`${backendUrl.rstrip('/')}/api/delete-credentials`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken: token })
+            }).catch(() => {});
+          }
+
+          const curSettings = store.getState().settings || {};
+          delete curSettings.psAutoSync;
+          store.updateSettings(curSettings);
+
+          showToast('Auto-sync disabled', 'info');
+          closeModal();
+          renderSettingsView();
+        } catch (e) {
+          showToast('Error: ' + e.message, 'danger');
+        }
+      });
+    });
+  }
+
+  function openPowerSchoolBookmarkletModal() {
+    const html = `
+      <div class="modal-panel" style="max-width:580px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+          <h2 style="font-size:1.125rem; font-weight:700; color:var(--text-primary);">🔖 PowerSchool Bookmarklet Setup</h2>
+          <button id="modal-close" class="modal-close-btn">&times;</button>
+        </div>
+
+        <div style="font-size:0.8125rem; color:var(--text-secondary); line-height:1.6;">
+          <p style="margin-bottom:0.75rem;"><strong>This bookmarklet extracts your classes, periods, teachers, rooms, and grades directly from your PowerSchool portal.</strong></p>
+
+          <ol style="padding-left:1.25rem; margin-bottom:1rem;">
+            <li style="margin-bottom:0.5rem;">Right-click your browser's <strong>Bookmarks Bar</strong> and select <strong>"Add page"</strong> or <strong>"Add bookmark"</strong>.</li>
+            <li style="margin-bottom:0.5rem;">Name it: <strong>📋 Grab PS Grades</strong></li>
+            <li style="margin-bottom:0.5rem;">In the <strong>URL</strong> field, paste the code from the box below.</li>
+            <li style="margin-bottom:0.5rem;">Log into <a href="https://hisdconnect.houstonisd.org/public" target="_blank" rel="noopener" style="color:var(--accent-primary);">HISD PowerSchool</a> and navigate to your <strong>Grades and Attendance</strong> page.</li>
+            <li style="margin-bottom:0.5rem;">Click the bookmark. It will copy your grades JSON directly to your clipboard.</li>
+            <li>Come back here, click <strong>"Paste PowerSchool Grades"</strong>, and paste.</li>
+          </ol>
+
+          <p style="margin-bottom:0.75rem; padding:0.625rem; background:var(--bg-surface-subtle); border-radius:var(--radius-sm); border:1px solid var(--border-default); font-size:0.75rem; color:var(--text-tertiary);">
+            <strong>💡 Quick Copy Alternative:</strong> You can also just go to your PowerSchool grades page, press <strong>Ctrl+A</strong> (Select All), then <strong>Ctrl+C</strong> (Copy), and paste the whole page into the import box!
+          </p>
+
+          <div style="position:relative;">
+            <label style="font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); display:block; margin-bottom:0.375rem;">Bookmarklet Code</label>
+            <textarea id="ps-bookmarklet-code" readonly rows="4" style="width:100%; font-family:'SF Mono',Consolas,monospace; font-size:0.6875rem; padding:0.625rem; border:1px solid var(--border-default); border-radius:var(--radius-sm); background:var(--bg-surface-subtle); color:var(--text-primary); resize:vertical; line-height:1.5;"></textarea>
+            <button id="btn-copy-bookmarklet" class="btn-primary" style="margin-top:0.5rem; font-size:0.8125rem;">📋 Copy Bookmarklet Code</button>
+          </div>
+
+          <p style="margin-top:1rem; padding:0.625rem; background:var(--bg-surface-subtle); border-radius:var(--radius-sm); border:1px solid var(--border-default); font-size:0.75rem; color:var(--text-tertiary);">
+            <strong>🔒 100% Client-Side Privacy:</strong> Runs entirely inside your browser. No passwords, credentials, or school data ever leave your device.
+          </p>
+        </div>
+      </div>
+    `;
+
+    openModalHTML(html, dialog => {
+      const textarea = dialog.querySelector('#ps-bookmarklet-code');
+      if (textarea) textarea.value = PS_BOOKMARKLET_CODE;
+
+      dialog.querySelector('#btn-copy-bookmarklet')?.addEventListener('click', () => {
+        if (textarea) {
+          textarea.select();
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(textarea.value).then(() => {
+              showToast('Bookmarklet code copied!', 'success');
+            }).catch(() => {
+              document.execCommand('copy');
+              showToast('Bookmarklet code copied!', 'success');
+            });
+          } else {
+            document.execCommand('copy');
+            showToast('Bookmarklet code copied!', 'success');
+          }
+        }
+      });
+    });
+  }
+
+  function openPowerSchoolImportModal() {
+    const existingClasses = store.getClasses();
+
+    const html = `
+      <div class="modal-panel" style="max-width:700px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+          <h2 style="font-size:1.125rem; font-weight:700; color:var(--text-primary);">📋 Import PowerSchool Grades</h2>
+          <button id="modal-close" class="modal-close-btn">&times;</button>
+        </div>
+
+        <div style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:0.75rem; line-height:1.5;">
+          Paste raw copied text from your PowerSchool Grades page (press <strong>Ctrl+A</strong> then <strong>Ctrl+C</strong>), or paste JSON from the bookmarklet.
+        </div>
+
+        <textarea id="ps-paste-input" rows="6" placeholder="Paste your PowerSchool text or bookmarklet data here...
+
+Example: Go to HISD PowerSchool 'Grades and Attendance' page, press Ctrl+A (Select All), Ctrl+C (Copy), and paste right here." style="width:100%; font-family:'SF Mono',Consolas,monospace; font-size:0.75rem; padding:0.75rem; border:1px solid var(--border-default); border-radius:var(--radius-sm); background:var(--bg-surface-subtle); color:var(--text-primary); resize:vertical; line-height:1.5; margin-bottom:0.75rem;"></textarea>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+          <button id="btn-ps-parse" class="btn-primary" style="font-size:0.8125rem;">🔍 Parse & Preview PowerSchool Data</button>
+          <button id="btn-ps-clear" class="btn-secondary" style="font-size:0.75rem;">Clear Input</button>
+        </div>
+
+        <div id="ps-preview-area" style="display:none; border-top:1px solid var(--border-default); padding-top:1rem; margin-bottom:0.5rem;">
+          <!-- Student Name banner if detected -->
+          <div id="ps-student-banner" style="display:none; align-items:center; gap:0.625rem; padding:0.625rem 0.875rem; background:rgba(79, 70, 229, 0.08); border:1px solid rgba(79, 70, 229, 0.25); border-radius:var(--radius-sm); margin-bottom:1rem; font-size:0.8125rem;">
+            <span style="font-size:1.125rem;">👤</span>
+            <div style="flex:1;">
+              <span style="color:var(--text-secondary);">Student Detected: </span>
+              <strong id="ps-student-name-display" style="color:var(--text-primary);"></strong>
+            </div>
+            <label style="display:flex; align-items:center; gap:0.375rem; cursor:pointer; font-size:0.75rem; font-weight:600; color:var(--accent-primary);">
+              <input type="checkbox" id="ps-apply-student-name" checked style="accent-color:var(--accent-primary);" />
+              Update Planner Profile Name
+            </label>
+          </div>
+
+          <!-- Mode presets -->
+          <div style="margin-bottom:0.875rem;">
+            <div style="font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); margin-bottom:0.5rem;">Quick Action Preset</div>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+              <button type="button" class="btn-secondary" id="btn-mode-smart" style="font-size:0.75rem; padding:0.375rem 0.625rem; font-weight:600; border-color:var(--accent-primary);">
+                ✨ Smart Match (Auto Link / Create)
+              </button>
+              <button type="button" class="btn-secondary" id="btn-mode-grades-only" style="font-size:0.75rem; padding:0.375rem 0.625rem;">
+                🎯 Update Grades Only (No New Classes)
+              </button>
+              <button type="button" class="btn-secondary" id="btn-mode-all-new" style="font-size:0.75rem; padding:0.375rem 0.625rem;">
+                ➕ Add All as New Classes
+              </button>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+            <label style="font-weight:600; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary);">Classes & Grades Detected</label>
+            <span id="ps-count-summary" style="font-size:0.75rem; color:var(--text-secondary);"></span>
+          </div>
+
+          <div id="ps-preview-list" style="max-height:280px; overflow-y:auto; border:1px solid var(--border-default); border-radius:var(--radius-sm); background:var(--bg-surface-subtle); margin-bottom:1rem;"></div>
+
+          <div style="display:flex; gap:0.625rem; justify-content:flex-end; align-items:center;">
+            <button id="btn-ps-cancel" class="btn-secondary" style="font-size:0.8125rem;">Cancel</button>
+            <button id="btn-ps-confirm" class="btn-primary" style="font-size:0.8125rem;" disabled>
+              ✅ Apply & Import to Gradebook
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    let parsedClasses = [];
+    let detectedStudentName = null;
+
+    openModalHTML(html, dialog => {
+      const pasteInput = dialog.querySelector('#ps-paste-input');
+      const previewArea = dialog.querySelector('#ps-preview-area');
+      const previewList = dialog.querySelector('#ps-preview-list');
+      const parseBtn = dialog.querySelector('#btn-ps-parse');
+      const clearBtn = dialog.querySelector('#btn-ps-clear');
+      const confirmBtn = dialog.querySelector('#btn-ps-confirm');
+      const cancelBtn = dialog.querySelector('#btn-ps-cancel');
+      const studentBanner = dialog.querySelector('#ps-student-banner');
+      const studentNameDisplay = dialog.querySelector('#ps-student-name-display');
+      const studentNameCheck = dialog.querySelector('#ps-apply-student-name');
+      const countSummary = dialog.querySelector('#ps-count-summary');
+
+      clearBtn?.addEventListener('click', () => {
+        if (pasteInput) pasteInput.value = '';
+        if (previewArea) previewArea.style.display = 'none';
+        parsedClasses = [];
+        detectedStudentName = null;
+      });
+
+      cancelBtn?.addEventListener('click', closeModal);
+
+      parseBtn?.addEventListener('click', () => {
+        const raw = (pasteInput?.value || '').trim();
+        if (!raw) {
+          showToast('Please paste your PowerSchool text or JSON first', 'danger');
+          return;
+        }
+
+        const result = parsePowerSchoolInput(raw);
+        parsedClasses = result.classes || [];
+        detectedStudentName = result.studentName || null;
+
+        if (!parsedClasses.length) {
+          showToast('Could not find any classes in the pasted text. Please make sure you copied the Grades and Attendance table.', 'danger');
+          if (previewArea) previewArea.style.display = 'none';
+          if (confirmBtn) confirmBtn.disabled = true;
+          return;
+        }
+
+        // Show student name banner if detected
+        if (detectedStudentName && studentBanner && studentNameDisplay) {
+          studentNameDisplay.textContent = detectedStudentName;
+          studentBanner.style.display = 'flex';
+        } else if (studentBanner) {
+          studentBanner.style.display = 'none';
+        }
+
+        // Auto-match against existing classes
+        applySmartMatch();
+        renderPreview();
+        previewArea.style.display = 'block';
+        showToast(`Found ${parsedClasses.length} class${parsedClasses.length !== 1 ? 'es' : ''} in PowerSchool data!`, 'success');
+      });
+
+      function applySmartMatch() {
+        parsedClasses.forEach(pc => {
+          const match = findBestMatchingClass(pc.className, existingClasses);
+          if (match) {
+            pc._action = `update:${match.id}`;
+            pc._matchedClass = match;
+          } else {
+            pc._action = 'new';
+            pc._matchedClass = null;
+          }
+        });
+      }
+
+      function applyGradesOnlyMode() {
+        parsedClasses.forEach(pc => {
+          const match = findBestMatchingClass(pc.className, existingClasses);
+          if (match) {
+            pc._action = `update:${match.id}`;
+            pc._matchedClass = match;
+          } else {
+            pc._action = 'skip';
+            pc._matchedClass = null;
+          }
+        });
+      }
+
+      function applyAllNewMode() {
+        parsedClasses.forEach(pc => {
+          pc._action = 'new';
+        });
+      }
+
+      dialog.querySelector('#btn-mode-smart')?.addEventListener('click', () => {
+        applySmartMatch();
+        renderPreview();
+      });
+
+      dialog.querySelector('#btn-mode-grades-only')?.addEventListener('click', () => {
+        applyGradesOnlyMode();
+        renderPreview();
+      });
+
+      dialog.querySelector('#btn-mode-all-new')?.addEventListener('click', () => {
+        applyAllNewMode();
+        renderPreview();
+      });
+
+      function renderPreview() {
+        if (!previewList) return;
+
+        let activeCount = 0;
+        let newCount = 0;
+        let updateCount = 0;
+
+        previewList.innerHTML = parsedClasses.map((pc, idx) => {
+          const isSkipped = pc._action === 'skip';
+          if (!isSkipped) {
+            activeCount++;
+            if (pc._action === 'new') newCount++;
+            if (pc._action.startsWith('update:')) updateCount++;
+          }
+
+          const gradeBadge = pc.gradePercent !== null && pc.gradePercent !== undefined
+            ? `<span style="display:inline-block; padding:0.15rem 0.55rem; border-radius:9999px; font-weight:700; font-size:0.75rem; background:${pc.gradePercent >= 90 ? 'rgba(16, 185, 129, 0.15)' : pc.gradePercent >= 70 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color:${pc.gradePercent >= 90 ? 'var(--success)' : pc.gradePercent >= 70 ? 'var(--warning)' : 'var(--danger)'};">${pc.gradePercent}%</span>`
+            : `<span style="display:inline-block; padding:0.15rem 0.55rem; border-radius:9999px; font-size:0.6875rem; background:var(--bg-surface); color:var(--text-tertiary); border:1px solid var(--border-default);">No grade posted</span>`;
+
+          const metaPills = [
+            pc.period ? `<span style="background:var(--bg-surface); padding:0.1rem 0.375rem; border-radius:4px; border:1px solid var(--border-default);">Period ${escapeHTML(pc.period)}</span>` : '',
+            pc.room ? `<span style="background:var(--bg-surface); padding:0.1rem 0.375rem; border-radius:4px; border:1px solid var(--border-default);">Rm ${escapeHTML(pc.room)}</span>` : '',
+            pc.teacher ? `<span>👨‍🏫 ${escapeHTML(pc.teacher)}</span>` : ''
+          ].filter(Boolean).join(' · ');
+
+          return `
+            <div style="padding:0.625rem 0.75rem; border-bottom:1px solid var(--border-default); display:flex; flex-direction:column; gap:0.375rem; ${isSkipped ? 'opacity:0.45; background:var(--bg-surface-subtle);' : ''}">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+                <div style="display:flex; align-items:center; gap:0.5rem; min-width:0;">
+                  <input type="checkbox" id="ps-class-check-${idx}" data-idx="${idx}" ${!isSkipped ? 'checked' : ''} style="accent-color:var(--accent-primary); width:16px; height:16px; cursor:pointer;" />
+                  <strong style="font-size:0.875rem; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(pc.className)}</strong>
+                </div>
+                <div>${gradeBadge}</div>
+              </div>
+              
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; font-size:0.6875rem; color:var(--text-secondary); padding-left:1.5rem;">
+                <div>${metaPills || 'Standard Class'}</div>
+                
+                <div style="display:flex; align-items:center; gap:0.375rem;">
+                  <label style="font-size:0.6875rem; color:var(--text-tertiary); font-weight:600;">Action:</label>
+                  <select id="ps-class-action-${idx}" data-idx="${idx}" style="font-size:0.6875rem; padding:0.25rem 0.5rem; border-radius:var(--radius-sm); border:1px solid var(--border-default); background:var(--bg-surface); color:var(--text-primary); max-width:230px;">
+                    <option value="new" ${pc._action === 'new' ? 'selected' : ''}>➕ Create as New Class</option>
+                    ${existingClasses.map(ec => `
+                      <option value="update:${ec.id}" ${pc._action === `update:${ec.id}` ? 'selected' : ''}>
+                        🔄 Update: ${escapeHTML(ec.name)}
+                      </option>
+                    `).join('')}
+                    <option value="skip" ${pc._action === 'skip' ? 'selected' : ''}>🚫 Skip / Ignore</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        if (countSummary) {
+          countSummary.textContent = `${newCount} new, ${updateCount} to update, ${parsedClasses.length - activeCount} skipped`;
+        }
+
+        if (confirmBtn) {
+          confirmBtn.disabled = activeCount === 0;
+          confirmBtn.textContent = `✅ Import ${activeCount} Course${activeCount !== 1 ? 's' : ''}`;
+        }
+
+        // Wire change listeners
+        previewList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          cb.addEventListener('change', () => {
+            const idx = parseInt(cb.dataset.idx);
+            if (!isNaN(idx) && parsedClasses[idx]) {
+              if (cb.checked) {
+                const match = findBestMatchingClass(parsedClasses[idx].className, existingClasses);
+                parsedClasses[idx]._action = match ? `update:${match.id}` : 'new';
+              } else {
+                parsedClasses[idx]._action = 'skip';
+              }
+              renderPreview();
+            }
+          });
+        });
+
+        previewList.querySelectorAll('select').forEach(sel => {
+          sel.addEventListener('change', () => {
+            const idx = parseInt(sel.dataset.idx);
+            if (!isNaN(idx) && parsedClasses[idx]) {
+              parsedClasses[idx]._action = sel.value;
+              renderPreview();
+            }
+          });
+        });
+      }
+
+      confirmBtn?.addEventListener('click', () => {
+        let createdCount = 0;
+        let updatedGradeCount = 0;
+
+        // Apply student profile name if checked
+        if (detectedStudentName && studentNameCheck && studentNameCheck.checked) {
+          store.updateSettings({ studentName: detectedStudentName });
+        }
+
+        parsedClasses.forEach((pc, i) => {
+          if (pc._action === 'skip') return;
+
+          if (pc._action.startsWith('update:')) {
+            // Update grades on existing class (NO NEW CLASS CREATED)
+            const targetClassId = pc._action.replace('update:', '');
+            const targetClass = store.getClassById(targetClassId);
+            if (!targetClass) return;
+
+            // Update teacher or room if target class was missing them
+            const updates = {};
+            if (!targetClass.teacher && pc.teacher) updates.teacher = pc.teacher;
+            if (!targetClass.room && pc.room) updates.room = pc.room;
+            if (Object.keys(updates).length > 0) {
+              store.updateClass(targetClassId, updates);
+            }
+
+            // Record / Update Grade Snapshot if gradePercent is present
+            if (pc.gradePercent !== null && pc.gradePercent !== undefined) {
+              const classAsgs = store.getAssignments().filter(a => a.classId === targetClassId);
+              const existingSnapshot = classAsgs.find(a => 
+                a.title.includes('PowerSchool Current Grade') || a.title.includes('Current Grade Snapshot')
+              );
+
+              const categoryId = (targetClass.gradeCategories && targetClass.gradeCategories[0] && targetClass.gradeCategories[0].id) || null;
+
+              if (existingSnapshot) {
+                store.updateAssignment(existingSnapshot.id, {
+                  scoreEarned: pc.gradePercent,
+                  maxScore: 100,
+                  completionPercentage: 100,
+                  status: 'completed',
+                  notes: `Updated from PowerSchool on ${new Date().toLocaleDateString()}`
+                });
+              } else {
+                store.addAssignment({
+                  classId: targetClassId,
+                  title: 'PowerSchool Current Grade Snapshot',
+                  description: `Imported grade from PowerSchool on ${new Date().toLocaleDateString()}`,
+                  type: 'homework',
+                  dueDate: new Date().toISOString(),
+                  priority: 'medium',
+                  status: 'completed',
+                  completionPercentage: 100,
+                  gradeCategoryId: categoryId,
+                  scoreEarned: pc.gradePercent,
+                  maxScore: 100,
+                  subtasks: [],
+                  notes: pc.gradeLetter ? `Letter grade: ${pc.gradeLetter}` : ''
+                });
+              }
+              updatedGradeCount++;
+            }
+          } else if (pc._action === 'new') {
+            // Create new class
+            const catTimestamp = Date.now() + i;
+            const gradeCategories = [
+              { id: 'gc-hw-' + catTimestamp, name: 'Homework & Assignments', weight: 30 },
+              { id: 'gc-quiz-' + catTimestamp, name: 'Quizzes', weight: 20 },
+              { id: 'gc-exam-' + catTimestamp, name: 'Tests & Exams', weight: 35 },
+              { id: 'gc-part-' + catTimestamp, name: 'Participation & Classwork', weight: 15 }
+            ];
+
+            const colorIdx = store.getClasses().length;
+            const newClass = store.addClass({
+              name: pc.className,
+              teacher: pc.teacher || '',
+              room: pc.room || '',
+              color: SUBJECT_COLORS[(colorIdx + i) % SUBJECT_COLORS.length],
+              credits: 3,
+              gradeCategories: gradeCategories,
+              notes: `Imported from PowerSchool${pc.period ? ' (' + pc.period + ')' : ''}${pc.gradePercent !== null ? ' — Current grade: ' + pc.gradePercent + '%' : ''}`
+            });
+            createdCount++;
+
+            if (pc.gradePercent !== null && pc.gradePercent !== undefined) {
+              store.addAssignment({
+                classId: newClass.id,
+                title: 'PowerSchool Current Grade Snapshot',
+                description: `Auto-imported overall grade from PowerSchool on ${new Date().toLocaleDateString()}`,
+                type: 'homework',
+                dueDate: new Date().toISOString(),
+                priority: 'medium',
+                status: 'completed',
+                completionPercentage: 100,
+                gradeCategoryId: gradeCategories[0].id,
+                scoreEarned: pc.gradePercent,
+                maxScore: 100,
+                subtasks: [],
+                notes: pc.gradeLetter ? `Letter grade: ${pc.gradeLetter}` : ''
+              });
+              updatedGradeCount++;
+            }
+          }
+        });
+
+        store.notify('data_imported');
+        closeModal();
+
+        const messages = [];
+        if (createdCount > 0) messages.push(`${createdCount} new class${createdCount !== 1 ? 'es' : ''} added`);
+        if (updatedGradeCount > 0) messages.push(`${updatedGradeCount} grade${updatedGradeCount !== 1 ? 's' : ''} recorded`);
+        showToast(messages.join(' and ') || 'PowerSchool import complete!', 'success');
+        navigateTo('gradebook');
+      });
+    });
+  }
+
+  /**
+   * Robust multi-strategy PowerSchool parser handling:
+   * 1. Direct Ctrl+A / Ctrl+C raw table text from HISD PowerSchool portal
+   * 2. Tab-separated browser table copies
+   * 3. PowerSchool Bookmarklet JSON payload
+   * 4. Student Name detection from header
+   */
+  function parsePowerSchoolInput(raw) {
+    if (!raw) return { studentName: null, classes: [] };
+
+    let studentName = null;
+    const nameMatch = raw.match(/Welcome,\s+([A-Za-z\s]+?)(?:\s+Help|\s+Sign Out|\n)/i) ||
+                      raw.match(/Grades and Attendance:\s*([A-Za-z]+,\s*[A-Za-z\s]+)/i);
+    if (nameMatch) {
+      let n = nameMatch[1].trim();
+      if (n.includes(',')) {
+        const parts = n.split(',').map(s => s.trim());
+        studentName = `${parts[1]} ${parts[0]}`;
+      } else {
+        studentName = n;
+      }
+    }
+
+    // Attempt 1: JSON parse (from bookmarklet output)
+    try {
+      const json = JSON.parse(raw);
+      if (json && json.source === 'powerschool' && Array.isArray(json.classes)) {
+        return {
+          studentName: json.studentName || studentName,
+          classes: json.classes.map(c => ({
+            className: cleanCourseName(c.className || c.name || 'Unknown Class'),
+            period: c.period || '',
+            teacher: c.teacher || '',
+            room: c.room || '',
+            gradePercent: c.gradePercent !== undefined && c.gradePercent !== null ? Number(c.gradePercent) : null,
+            gradeLetter: c.gradeLetter || null
+          }))
+        };
+      }
+      if (Array.isArray(json)) {
+        return {
+          studentName,
+          classes: json.filter(c => c.className || c.name).map(c => ({
+            className: cleanCourseName(c.className || c.name),
+            period: c.period || '',
+            teacher: c.teacher || '',
+            room: c.room || '',
+            gradePercent: c.gradePercent !== undefined && c.gradePercent !== null ? Number(c.gradePercent) : null,
+            gradeLetter: c.gradeLetter || null
+          }))
+        };
+      }
+    } catch (e) {}
+
+    // Attempt 2: PowerSchool table block parser (HISD and standard PowerSchool portals)
+    const classes = [];
+    const lines = raw.split(/\r?\n/);
+
+    // Strategy 1: Sectioning by period markers (e.g. "0(A)", "1(A)", "Period 1", "Per 2")
+    const periodIndices = [];
+    const periodRegex = /^\s*(\d+\s*\([A-Za-z0-9,\- ]+\)|(?:Period|Per|Block)\s*\d+)/i;
+
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(periodRegex);
+      if (m) {
+        periodIndices.push({ lineIndex: i, period: m[1].trim() });
+      }
+    }
+
+    // Fallback: If no period markers, look for lines with "Email "
+    if (periodIndices.length === 0) {
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes('Email ')) {
+          const prevIdx = Math.max(0, i - 1);
+          periodIndices.push({ lineIndex: prevIdx, period: '' });
+        }
+      }
+    }
+
+    if (periodIndices.length > 0) {
+      for (let p = 0; p < periodIndices.length; p++) {
+        const start = periodIndices[p].lineIndex;
+        const end = (p + 1 < periodIndices.length) ? periodIndices[p + 1].lineIndex : lines.length;
+        const blockLines = lines.slice(start, end);
+        const blockText = blockLines.join('\n');
+        const period = periodIndices[p].period;
+
+        let courseName = '';
+        let teacher = '';
+        let room = '';
+        let gradePercent = null;
+        let gradeLetter = null;
+
+        // Extract Course Name from line 0 or line 1
+        const line0Parts = blockLines[0].split('\t').map(s => s.trim()).filter(Boolean);
+        for (let k = line0Parts.length - 1; k >= 0; k--) {
+          const part = line0Parts[k];
+          if (part && !part.includes('Not available') && part !== '.' && !part.match(/^\d+$/) && !part.match(/^\d+\s*\([A-Za-z0-9,\- ]+\)$/)) {
+            courseName = cleanCourseName(part);
+            break;
+          }
+        }
+
+        if (!courseName) {
+          for (let j = 0; j < Math.min(blockLines.length, 4); j++) {
+            const l = blockLines[j].trim();
+            if (l && !l.startsWith('Email') && !l.startsWith('- Rm') && !l.includes('Not available') && !l.match(/^\d+$/)) {
+              const clean = l.replace(/^\d+\s*\([A-Za-z0-9,\- ]+\)\s*/, '').replace(/\t+/g, ' ').trim();
+              const cleaned = cleanCourseName(clean);
+              if (cleaned.length > 2 && !cleaned.toLowerCase().startsWith('attendance')) {
+                courseName = cleaned;
+                break;
+              }
+            }
+          }
+        }
+
+        // Teacher parsing: "Email Morales, Roberto E" -> "Roberto E Morales"
+        const teacherMatch = blockText.match(/Email\s+([A-Za-z\s,.\-0-9]+?)(?:\r?\n|\t|- Rm|$)/i);
+        if (teacherMatch) {
+          let t = teacherMatch[1].trim();
+          if (t.toLowerCase().startsWith('teacher')) {
+            teacher = '';
+          } else if (t.includes(',')) {
+            const parts = t.split(',').map(s => s.trim());
+            teacher = `${parts[1] || ''} ${parts[0] || ''}`.trim();
+          } else {
+            teacher = t;
+          }
+        }
+
+        // Room parsing: "- Rm:\n 3610" or "- Rm: 3610"
+        const roomMatch = blockText.match(/-\s*Rm:\s*(\d+[A-Za-z]?|[A-Za-z0-9\-]+)?/i);
+        if (roomMatch && roomMatch[1]) {
+          room = roomMatch[1].trim();
+        } else {
+          for (let j = 0; j < blockLines.length; j++) {
+            if (blockLines[j].trim() === '- Rm:' && j + 1 < blockLines.length) {
+              const nextL = blockLines[j + 1].trim();
+              if (nextL.match(/^\d+[A-Za-z]?$/)) {
+                room = nextL;
+                break;
+              }
+            }
+          }
+        }
+
+        // Grade score parsing
+        const foundScores = [];
+        let pastHeader = false;
+
+        for (let j = 0; j < blockLines.length; j++) {
+          const l = blockLines[j].trim();
+          if (l.startsWith('Email') || l.startsWith('- Rm:')) {
+            pastHeader = true;
+            continue;
+          }
+          if (!pastHeader) continue;
+          if (room && l === room) continue;
+          if (l.startsWith('Attendance Totals')) break;
+
+          const tokens = l.split(/[\t\s]+/).map(s => s.trim()).filter(Boolean);
+          for (const tok of tokens) {
+            if (tok === room) continue;
+            if (tok === '[ i ]' || tok === 'Not' || tok === 'available' || tok === '.') continue;
+            if (/^\d{1,3}(?:\.\d+)?$/.test(tok)) {
+              foundScores.push(parseFloat(tok));
+            }
+          }
+        }
+
+        if (foundScores.length > 0) {
+          let gradeCandidates = [];
+          if (foundScores.length >= 2 && foundScores[foundScores.length - 1] === 0 && foundScores[foundScores.length - 2] === 0) {
+            gradeCandidates = foundScores.slice(0, foundScores.length - 2);
+          } else {
+            gradeCandidates = foundScores;
+          }
+
+          if (gradeCandidates.length > 0) {
+            gradePercent = gradeCandidates[0];
+          }
+        }
+
+        if (courseName) {
+          if (courseName.length > 1 && !courseName.toLowerCase().startsWith('attendance totals')) {
+            classes.push({
+              className: courseName,
+              period: period || '',
+              teacher: teacher || '',
+              room: room || '',
+              gradePercent: gradePercent,
+              gradeLetter: gradeLetter
+            });
+          }
+        }
+      }
+    }
+
+    // Strategy 2: Tab-separated table parser (if period sectioning found nothing)
+    if (classes.length === 0) {
+      const seen = {};
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const tabParts = line.split('\t').map(p => p.trim()).filter(Boolean);
+
+        if (tabParts.length >= 2) {
+          let courseName = '';
+          let teacher = '';
+          let gradePercent = null;
+          let gradeLetter = null;
+
+          for (const part of tabParts) {
+            const pctMatch = part.match(/(\d+\.?\d*)\s*%/);
+            const letterMatch = part.match(/^([A-F][+-]?)$/);
+
+            if (pctMatch && gradePercent === null) {
+              gradePercent = parseFloat(pctMatch[1]);
+            } else if (letterMatch && !gradeLetter) {
+              gradeLetter = letterMatch[1];
+            } else if (!courseName && part.length > 2 && !part.match(/^\d+$/) && !part.match(/^\d+\.?\d*$/)) {
+              courseName = cleanCourseName(part);
+            } else if (courseName && !teacher && part.match(/[A-Z][a-z]/) && !part.match(/^\d/)) {
+              teacher = part;
+            }
+          }
+
+          if (courseName && (gradePercent !== null || gradeLetter) && !seen[courseName.toLowerCase()]) {
+            seen[courseName.toLowerCase()] = true;
+            classes.push({ className: courseName, period: '', teacher, room: '', gradePercent, gradeLetter });
+          }
+        }
+      }
+    }
+
+    return { studentName, classes };
   }
 
   // Toast Notification Helper

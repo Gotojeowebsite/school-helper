@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: academiapro-sync-api
+    env: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: free
+    region: oregon
+    envVars:
+      - key: FIREBASE_PROJECT_ID
+        value: school-helper-5a829
+      - key: FIREBASE_API_KEY
+        value: AIzaSyCs9TwwOTWRoypz5xVQJrT1CtNMBiUt12Y
+      - key: CRON_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true

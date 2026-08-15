@@ -1,0 +1,50 @@
+name: 🔄 PowerSchool Background Grade Sync
+
+on:
+  # Run automatically twice a day on weekdays (Mon-Fri)
+  # 7:00 AM CST (12:00 UTC) and 4:30 PM CST (21:30 UTC)
+  schedule:
+    - cron: '0 12,21 * * 1-5'
+  
+  # Allows you to trigger the sync manually anytime from the GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  powerschool-sync:
+    name: 🎓 Scrape & Sync Grades
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Install Dependencies & Playwright
+        run: |
+          pip install playwright requests
+          python -m playwright install --with-deps chromium
+
+      - name: 🚀 Run PowerSchool Cloud Sync
+        env:
+          PS_USERNAME: ${{ secrets.PS_USERNAME }}
+          PS_PASSWORD: ${{ secrets.PS_PASSWORD }}
+          PS_PORTAL_URL: ${{ secrets.PS_PORTAL_URL || 'https://hisdconnect.houstonisd.org/public/' }}
+          FIREBASE_EMAIL: ${{ secrets.FIREBASE_EMAIL }}
+          FIREBASE_PASSWORD: ${{ secrets.FIREBASE_PASSWORD }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: |
+          python scripts/powerschool_sync.py
+
+      - name: 💾 Upload Latest Snapshot Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: powerschool-latest-grades
+          path: powerschool_latest.json
+          retention-days: 7
