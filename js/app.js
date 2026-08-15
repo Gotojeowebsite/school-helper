@@ -353,6 +353,277 @@
     };
   }
 
+  // --- DEFAULT BUILT-IN FIREBASE SERVER CONFIGURATION ---
+  const DEFAULT_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCs9TwwOTWRoypz5xVQJrT1CtNMBiUt12Y",
+    authDomain: "school-helper-5a829.firebaseapp.com",
+    projectId: "school-helper-5a829",
+    storageBucket: "school-helper-5a829.firebasestorage.app",
+    messagingSenderId: "592591389543",
+    appId: "1:592591389543:web:57fe41e552c9909640e5c2",
+    measurementId: "G-KCB8CMB0HG"
+  };
+
+  // --- FIREBASE AUTHENTICATION & CLOUD SYNC SERVICE ---
+  const FirebaseSyncService = {
+    _auth: null,
+    _db: null,
+    _unsubscribeSnapshot: null,
+    _unsubscribeAuth: null,
+    _currentUser: null,
+    _syncStatus: 'offline', // 'offline' | 'syncing' | 'synced' | 'error' | 'not_configured'
+    _lastSyncTime: null,
+    _syncDebounceTimer: null,
+    _listeners: new Set(),
+    _isRemoteUpdate: false,
+
+    getSavedConfig() {
+      const raw = StorageSafe.getItem(FIREBASE_CONFIG_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.apiKey) return parsed;
+        } catch (e) {}
+      }
+      return DEFAULT_FIREBASE_CONFIG;
+    },
+
+    saveConfig(config) {
+      if (!config) {
+        StorageSafe.removeItem(FIREBASE_CONFIG_KEY);
+      } else {
+        StorageSafe.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(config));
+      }
+      return this.initialize(true);
+    },
+
+    isConfigured() {
+      const cfg = this.getSavedConfig();
+      return !!(cfg && cfg.apiKey && cfg.projectId);
+    },
+
+    initialize(forceReinit = false) {
+      if (typeof firebase === 'undefined') {
+        console.warn('Firebase compat SDK not found in global scope.');
+        this._syncStatus = 'offline';
+        this._notifyState();
+        return false;
+      }
+
+      const config = this.getSavedConfig();
+      if (!config || !config.apiKey || !config.projectId) {
+        this._syncStatus = 'not_configured';
+        this._notifyState();
+        return false;
+      }
+
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(config);
+        } else if (forceReinit) {
+          // Re-initialize existing app
+          try {
+            firebase.app().delete().then(() => {
+              firebase.initializeApp(config);
+              this._setupAuthAndFirestore();
+            });
+            return true;
+          } catch (e) {
+            console.warn('Could not reset firebase app instance:', e);
+          }
+        }
+
+        return this._setupAuthAndFirestore();
+      } catch (err) {
+        console.error('Firebase initialization error:', err);
+        this._syncStatus = 'error';
+        this._notifyState();
+        return false;
+      }
+    },
+
+    _setupAuthAndFirestore() {
+      try {
+        this._auth = firebase.auth();
+        this._db = firebase.firestore();
+
+        if (this._unsubscribeAuth) {
+          this._unsubscribeAuth();
+        }
+
+        this._unsubscribeAuth = this._auth.onAuthStateChanged(user => {
+          this._currentUser = user;
+          if (user) {
+            this._syncStatus = 'syncing';
+            this._notifyState();
+            this._startCloudListener(user.uid);
+          } else {
+            if (this._unsubscribeSnapshot) {
+              this._unsubscribeSnapshot();
+              this._unsubscribeSnapshot = null;
+            }
+            this._syncStatus = 'offline';
+            this._notifyState();
+          }
+        });
+
+        return true;
+      } catch (err) {
+        console.error('Error setting up Firebase Auth/Firestore:', err);
+        this._syncStatus = 'error';
+        this._notifyState();
+        return false;
+      }
+    },
+
+    onStateChange(fn) {
+      this._listeners.add(fn);
+      return () => this._listeners.delete(fn);
+    },
+
+    _notifyState() {
+      const state = this.getStatus();
+      this._listeners.forEach(fn => {
+        try { fn(state); } catch (e) { console.error('Firebase listener callback error:', e); }
+      });
+    },
+
+    getStatus() {
+      return {
+        isConfigured: this.isConfigured(),
+        isAuthenticated: !!this._currentUser,
+        user: this._currentUser ? {
+          uid: this._currentUser.uid,
+          email: this._currentUser.email || 'Guest User',
+          displayName: this._currentUser.displayName || '',
+          isAnonymous: !!this._currentUser.isAnonymous
+        } : null,
+        status: this._syncStatus,
+        lastSyncTime: this._lastSyncTime
+      };
+    },
+
+    async signUp(email, password, displayName = '') {
+      if (!this.initialize()) throw new Error('Firebase is not configured yet. Please enter your project keys.');
+      const cred = await this._auth.createUserWithEmailAndPassword(email, password);
+      if (displayName && cred.user) {
+        try {
+          await cred.user.updateProfile({ displayName });
+        } catch (e) {}
+      }
+      return cred.user;
+    },
+
+    async signIn(email, password) {
+      if (!this.initialize()) throw new Error('Firebase is not configured yet. Please enter your project keys.');
+      const cred = await this._auth.signInWithEmailAndPassword(email, password);
+      return cred.user;
+    },
+
+    async signInAnonymously() {
+      if (!this.initialize()) throw new Error('Firebase is not configured yet. Please enter your project keys.');
+      const cred = await this._auth.signInAnonymously();
+      return cred.user;
+    },
+
+    async sendPasswordReset(email) {
+      if (!this.initialize()) throw new Error('Firebase is not configured yet. Please enter your project keys.');
+      await this._auth.sendPasswordResetEmail(email);
+    },
+
+    async signOut() {
+      if (this._auth) {
+        await this._auth.signOut();
+      }
+      this._currentUser = null;
+      if (this._unsubscribeSnapshot) {
+        this._unsubscribeSnapshot();
+        this._unsubscribeSnapshot = null;
+      }
+      this._syncStatus = 'offline';
+      this._notifyState();
+    },
+
+    _startCloudListener(uid) {
+      if (!this._db || !uid) return;
+      if (this._unsubscribeSnapshot) this._unsubscribeSnapshot();
+
+      const userDocRef = this._db.collection('users').doc(uid);
+
+      this._unsubscribeSnapshot = userDocRef.onSnapshot(
+        (docSnap) => {
+          if (docSnap && docSnap.exists) {
+            const remoteData = docSnap.data();
+            if (remoteData && (remoteData.assignments || remoteData.classes || remoteData.settings)) {
+              this._isRemoteUpdate = true;
+              if (typeof store !== 'undefined' && store) {
+                store.loadFromRemote(remoteData);
+              }
+              this._isRemoteUpdate = false;
+            }
+          } else {
+            // Document does not exist in Firestore yet: upload initial local dataset
+            if (typeof store !== 'undefined' && store) {
+              this.saveToCloud(store.getState(), true);
+            }
+          }
+          this._syncStatus = 'synced';
+          this._lastSyncTime = new Date();
+          this._notifyState();
+        },
+        (error) => {
+          console.error('Firestore snapshot listener error:', error);
+          this._syncStatus = 'error';
+          this._notifyState();
+        }
+      );
+    },
+
+    saveToCloud(data, immediate = false) {
+      if (!this._currentUser || !this._db || this._isRemoteUpdate) return;
+
+      if (this._syncDebounceTimer) {
+        clearTimeout(this._syncDebounceTimer);
+        this._syncDebounceTimer = null;
+      }
+
+      const doSave = async () => {
+        try {
+          this._syncStatus = 'syncing';
+          this._notifyState();
+
+          const cleanData = JSON.parse(JSON.stringify(data));
+          cleanData.lastUpdated = new Date().toISOString();
+
+          await this._db.collection('users').doc(this._currentUser.uid).set(cleanData, { merge: true });
+
+          this._syncStatus = 'synced';
+          this._lastSyncTime = new Date();
+          this._notifyState();
+        } catch (err) {
+          console.error('Cloud save failed:', err);
+          this._syncStatus = 'error';
+          this._notifyState();
+        }
+      };
+
+      if (immediate) {
+        doSave();
+      } else {
+        this._syncDebounceTimer = setTimeout(doSave, 800);
+      }
+    },
+
+    async forceSyncNow() {
+      if (!this._currentUser || !this._db) {
+        throw new Error('Not logged into a cloud account.');
+      }
+      if (typeof store !== 'undefined' && store) {
+        await this.saveToCloud(store.getState(), true);
+      }
+    }
+  };
+
   // --- ACADEMIC DATA STORE ---
   class AcademicStore {
     constructor() {
@@ -419,6 +690,14 @@
       }
     }
 
+    loadFromRemote(remoteData) {
+      if (!remoteData || typeof remoteData !== 'object') return;
+      const validated = this.validateAndMigrate(remoteData);
+      this.data = validated;
+      this.saveToStorage(this.data);
+      this.listeners.forEach(fn => fn('remote_sync', null, this.data));
+    }
+
     validateAndMigrate(data) {
       if (!data || typeof data !== 'object') {
         return getEmptyInitialData('Student', '');
@@ -470,6 +749,9 @@
 
     notify(changeType, payload) {
       this.saveToStorage(this.data);
+      if (typeof FirebaseSyncService !== 'undefined' && FirebaseSyncService.getStatus().isAuthenticated) {
+        FirebaseSyncService.saveToCloud(this.data);
+      }
       this.listeners.forEach(fn => fn(changeType, payload, this.data));
     }
 
@@ -916,6 +1198,18 @@
     bindGlobalEvents();
     setupKeyboardShortcuts();
     setupStoreSubscription();
+
+    // Initialize Firebase Cloud Service
+    if (typeof FirebaseSyncService !== 'undefined') {
+      FirebaseSyncService.initialize();
+      FirebaseSyncService.onStateChange(() => {
+        updateSidebarUser();
+        if (state.currentView === 'settings') {
+          renderSettingsView();
+        }
+      });
+    }
+
     updateSidebarUser();
     
     // Automatic persistence hooks
@@ -932,7 +1226,11 @@
 
   function updateSidebarUser() {
     const data = store.getState();
-    const studentName = data.settings.studentName || 'Student';
+    const fbState = typeof FirebaseSyncService !== 'undefined' ? FirebaseSyncService.getStatus() : null;
+    let studentName = data.settings.studentName || 'Student';
+    if (fbState && fbState.user && fbState.user.email && !fbState.user.isAnonymous) {
+      studentName = fbState.user.displayName || studentName || fbState.user.email.split('@')[0];
+    }
     const initials = studentName.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
     const avatarColor = data.settings.avatarColor || AVATAR_PALETTES[0];
 
@@ -942,7 +1240,19 @@
       elements.userAvatarDisplay.style.background = avatarColor;
     }
     if (elements.userStatusDisplay) {
-      elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot saved"></span> Local Workspace`;
+      if (fbState && fbState.isAuthenticated) {
+        if (fbState.status === 'syncing') {
+          elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot syncing"></span> Syncing Cloud...`;
+        } else if (fbState.status === 'error') {
+          elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot offline"></span> Sync Error`;
+        } else {
+          elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot synced"></span> Cloud Synced`;
+        }
+      } else if (fbState && fbState.isConfigured) {
+        elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot offline"></span> Sign In to Cloud`;
+      } else {
+        elements.userStatusDisplay.innerHTML = `<span class="cloud-status-dot saved"></span> Local Account`;
+      }
     }
   }
 
@@ -1020,17 +1330,17 @@
       elements.quickAddBtn.addEventListener('click', () => openQuickAddModal());
     }
 
-    // Profile Modals
+    // Profile & Cloud Account Modals
     if (elements.headerAuthBtn) {
-      elements.headerAuthBtn.addEventListener('click', () => openProfileModal());
+      elements.headerAuthBtn.addEventListener('click', () => openAccountSyncModal());
     }
     if (elements.sidebarUserCard) {
-      elements.sidebarUserCard.addEventListener('click', () => openProfileModal());
+      elements.sidebarUserCard.addEventListener('click', () => openAccountSyncModal());
     }
     if (elements.sidebarAuthBtn) {
       elements.sidebarAuthBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        openProfileModal();
+        openAccountSyncModal();
       });
     }
 
@@ -2367,32 +2677,71 @@
     const schoolName = data.settings.schoolName || '';
     const avatarColor = data.settings.avatarColor || AVATAR_PALETTES[0];
     const initials = studentName.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+    const fbStatus = typeof FirebaseSyncService !== 'undefined' ? FirebaseSyncService.getStatus() : null;
+
+    let syncBadgeHTML = '';
+    let syncDescHTML = '';
+    if (fbStatus && fbStatus.isAuthenticated) {
+      syncBadgeHTML = `<span class="cloud-status-badge connected"><span class="cloud-status-dot synced"></span> Synced (${fbStatus.user.email})</span>`;
+      syncDescHTML = `Connected to Firebase Cloud Firestore. Your assignments, exams, and timetable sync in real time across Google Sites embeds and iOS.`;
+    } else if (fbStatus && fbStatus.isConfigured) {
+      syncBadgeHTML = `<span class="cloud-status-badge offline"><span class="cloud-status-dot offline"></span> Ready to Log In</span>`;
+      syncDescHTML = `Firebase is configured. Sign in or create a free account to enable automatic cloud persistence.`;
+    } else {
+      syncBadgeHTML = `<span class="cloud-status-badge offline"><span class="cloud-status-dot offline"></span> Local Offline Only</span>`;
+      syncDescHTML = `Using browser local storage. Connect a free Firebase backend to prevent data loss in Google Sites iframes.`;
+    }
 
     container.innerHTML = `
       <div class="section-header">
         <div>
           <h1 class="section-title">Settings & Storage</h1>
-          <p class="section-subtitle">Local student profile, appearance preferences, calendar export, and data backups.</p>
+          <p class="section-subtitle">Manage cloud accounts, real-time sync, local profile, calendar export, and data backups.</p>
         </div>
       </div>
 
       <div style="max-width:760px; display:flex; flex-direction:column; gap:1.25rem;">
+        <!-- Cloud Account & Firebase Sync Card -->
+        <div class="card-panel" style="border-left: 5px solid var(--accent); background: linear-gradient(to right, rgba(79, 70, 229, 0.03), transparent);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">
+            <h3 class="panel-title" style="margin:0; display:flex; align-items:center; gap:0.5rem;">
+              <span>☁️</span> Cloud Account & Multi-Device Sync
+            </h3>
+            ${syncBadgeHTML}
+          </div>
+          
+          <p style="font-size:0.8125rem; color:var(--text-secondary); margin-bottom:1rem; line-height:1.45;">
+            ${syncDescHTML}
+          </p>
+
+          <div style="display:flex; gap:0.625rem; flex-wrap:wrap;">
+            <button class="btn-primary" id="btn-settings-open-cloud">
+              ${fbStatus && fbStatus.isAuthenticated ? '☁️ Manage Cloud Sync & Account' : '🚀 Connect Free Cloud Server'}
+            </button>
+            ${fbStatus && fbStatus.isAuthenticated ? `
+              <button class="btn-secondary" id="btn-settings-sync-now">
+                🔄 Sync Now
+              </button>
+            ` : ''}
+          </div>
+        </div>
+
         <!-- Local Profile Card -->
-        <div class="card-panel" style="border-left: 5px solid var(--accent);">
+        <div class="card-panel">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
             <h3 class="panel-title" style="margin:0;">👤 Student Profile</h3>
-            <span class="badge success">✓ Saved Locally in Browser</span>
+            <span class="badge success">✓ Active</span>
           </div>
           
           <div style="display:flex; align-items:center; gap:0.875rem; padding:0.75rem; background:var(--bg-surface-subtle); border-radius:var(--radius-md); margin-bottom:1rem;">
             <div class="user-avatar" style="width:42px; height:42px; font-size:1rem; background:${avatarColor};">${initials}</div>
             <div>
               <div style="font-weight:700; font-size:0.9375rem; color:var(--text-primary);">${studentName}</div>
-              <div style="font-size:0.75rem; color:var(--text-secondary);">${schoolName || 'Student Workspace'} · All data preserved across refreshes</div>
+              <div style="font-size:0.75rem; color:var(--text-secondary);">${schoolName || 'Student Workspace'}</div>
             </div>
           </div>
           
-          <button class="btn-primary" id="btn-settings-edit-profile">Edit Profile Details</button>
+          <button class="btn-secondary" id="btn-settings-edit-profile">Edit Profile Details</button>
         </div>
 
         <!-- Appearance -->
@@ -2442,6 +2791,17 @@
         </div>
       </div>
     `;
+
+    container.querySelector('#btn-settings-open-cloud')?.addEventListener('click', () => openAccountSyncModal());
+
+    container.querySelector('#btn-settings-sync-now')?.addEventListener('click', async () => {
+      try {
+        await FirebaseSyncService.forceSyncNow();
+        showToast('Cloud sync completed!', 'success');
+      } catch (err) {
+        showToast(err.message || 'Sync failed', 'danger');
+      }
+    });
 
     container.querySelector('#btn-settings-edit-profile')?.addEventListener('click', () => openProfileModal());
 
@@ -2533,6 +2893,427 @@
     state.modalContext = null;
   }
 
+  // Universal Account & Cloud Sync Modal
+  function openAccountSyncModal(defaultTab = 'signin') {
+    const fbState = typeof FirebaseSyncService !== 'undefined' ? FirebaseSyncService.getStatus() : null;
+    const curConfig = (typeof FirebaseSyncService !== 'undefined' && FirebaseSyncService.getSavedConfig()) || {};
+    const isAuthenticated = fbState && fbState.isAuthenticated;
+    const user = fbState && fbState.user;
+
+    const data = store.getState();
+    const studentName = (user && user.displayName) || data.settings.studentName || 'Student';
+    const avatarColor = data.settings.avatarColor || AVATAR_PALETTES[0];
+    const initials = studentName.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'ST';
+
+    let bodyHTML = '';
+
+    if (isAuthenticated) {
+      // Authenticated User Dashboard
+      bodyHTML = `
+        <div style="display:flex; align-items:center; gap:0.875rem; padding:0.875rem; background:var(--bg-surface-subtle); border-radius:var(--radius-md); margin-bottom:1.25rem; border:1px solid var(--border-default);">
+          <div class="user-avatar" style="width:48px; height:48px; font-size:1.125rem; background:${avatarColor};">${initials}</div>
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center; gap:0.5rem; justify-content:space-between;">
+              <div style="font-weight:700; font-size:1rem; color:var(--text-primary);">${studentName}</div>
+              <span class="cloud-status-badge connected"><span class="cloud-status-dot synced"></span> Synced</span>
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-secondary); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
+              ${user.email} ${user.isAnonymous ? '(Guest Account)' : ''}
+            </div>
+            <div style="font-size:0.6875rem; color:var(--text-muted); font-family:var(--font-mono); margin-top:2px;">
+              UID: ${user.uid.slice(0, 12)}...
+            </div>
+          </div>
+        </div>
+
+        <div class="cloud-info-box alert-box">
+          <div style="font-weight:700; font-size:0.8125rem; color:var(--text-primary); margin-bottom:0.25rem;">
+            🟢 Real-Time Cloud Synchronization Active
+          </div>
+          <p style="font-size:0.75rem; color:var(--text-secondary); margin:0; line-height:1.4;">
+            Every task, exam, course, and timetable edit automatically syncs to your Google Cloud Firestore account. Your data will persist seamlessly across Google Sites refreshes and iOS devices.
+          </p>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:0.625rem; margin-bottom:1rem;">
+          <button class="btn-primary" id="btn-modal-force-sync" style="width:100%;">
+            🔄 Sync Cloud Now
+          </button>
+          <button class="btn-secondary" id="btn-modal-edit-profile" style="width:100%;">
+            👤 Edit Student Profile Details
+          </button>
+          <button class="btn-secondary" id="btn-modal-view-config" style="width:100%;">
+            ⚙️ View / Update Firebase Configuration
+          </button>
+          <button class="btn-secondary" id="btn-modal-signout" style="width:100%; color:var(--danger); border-color:var(--danger-border);">
+            🚪 Disconnect / Sign Out
+          </button>
+        </div>
+      `;
+    } else {
+      // Unauthenticated: Sign In, Sign Up, or Configure
+      bodyHTML = `
+        <!-- Tabs -->
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab-btn ${defaultTab === 'signin' ? 'active' : ''}" data-target-tab="tab-signin">Sign In</button>
+          <button type="button" class="auth-tab-btn ${defaultTab === 'signup' ? 'active' : ''}" data-target-tab="tab-signup">Create Account</button>
+          <button type="button" class="auth-tab-btn ${defaultTab === 'config' ? 'active' : ''}" data-target-tab="tab-config">⚙️ Firebase Setup</button>
+        </div>
+
+        <div id="auth-alert-message" style="display:none; padding:0.625rem 0.75rem; border-radius:var(--radius-md); font-size:0.8125rem; margin-bottom:1rem;"></div>
+
+        <!-- TAB: SIGN IN -->
+        <div class="auth-pane ${defaultTab === 'signin' ? 'active' : ''}" id="tab-signin">
+          ${!fbState || !fbState.isConfigured ? `
+            <div class="cloud-info-box alert-box" style="margin-bottom:1rem;">
+              <div style="font-weight:700; font-size:0.8125rem; color:var(--text-primary); margin-bottom:0.25rem;">
+                ⚡ Quick 1-Time Setup Required
+              </div>
+              <div style="font-size:0.75rem; color:var(--text-secondary); line-height:1.4;">
+                To enable free cloud accounts, please paste your free Firebase project keys in the <strong>⚙️ Firebase Setup</strong> tab.
+              </div>
+            </div>
+          ` : ''}
+
+          <form id="form-signin">
+            <div class="form-group">
+              <label class="form-label">Email Address</label>
+              <input type="email" class="form-control" id="signin-email" placeholder="student@school.edu" required />
+            </div>
+            <div class="form-group">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label class="form-label">Password</label>
+                <a href="#" id="link-forgot-pw" style="font-size:0.75rem; color:var(--accent); text-decoration:none;">Forgot?</a>
+              </div>
+              <input type="password" class="form-control" id="signin-password" placeholder="••••••••" required />
+            </div>
+            <button type="submit" class="btn-primary" id="btn-submit-signin" style="width:100%; margin-top:0.5rem;">
+              Sign In & Sync
+            </button>
+          </form>
+
+          <div class="auth-divider">OR</div>
+
+          <div style="display:flex; gap:0.5rem; flex-direction:column;">
+            <button type="button" class="btn-secondary" id="btn-guest-login" style="width:100%;">
+              ⚡ Continue as Anonymous Guest
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB: CREATE ACCOUNT -->
+        <div class="auth-pane ${defaultTab === 'signup' ? 'active' : ''}" id="tab-signup">
+          <form id="form-signup">
+            <div class="form-group">
+              <label class="form-label">Student Name</label>
+              <input type="text" class="form-control" id="signup-name" placeholder="e.g. Alex Morgan" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email Address</label>
+              <input type="email" class="form-control" id="signup-email" placeholder="student@school.edu" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password (min 6 characters)</label>
+              <input type="password" class="form-control" id="signup-password" minlength="6" placeholder="••••••••" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Confirm Password</label>
+              <input type="password" class="form-control" id="signup-password-confirm" minlength="6" placeholder="••••••••" required />
+            </div>
+            <button type="submit" class="btn-primary" id="btn-submit-signup" style="width:100%; margin-top:0.5rem;">
+              Create Free Account & Sync
+            </button>
+          </form>
+        </div>
+
+        <!-- TAB: FIREBASE SETUP -->
+        <div class="auth-pane ${defaultTab === 'config' ? 'active' : ''}" id="tab-config">
+          <div class="firebase-config-guide">
+            <div style="font-weight:700; color:var(--text-primary); margin-bottom:0.25rem;">
+              How to get your free Firebase backend (100% Free - No credit card):
+            </div>
+            <ol>
+              <li>Go to <a href="https://console.firebase.google.com/" target="_blank" rel="noopener" style="color:var(--accent);">Firebase Console</a> and click <strong>Create a project</strong>.</li>
+              <li>Click <strong>Authentication → Get Started</strong> and enable <strong>Email/Password</strong> and <strong>Anonymous</strong>.</li>
+              <li>Click <strong>Firestore Database → Create database</strong> (Start in test mode).</li>
+              <li>Go to <strong>Project settings ⚙️ → General → Your apps → Web (&lt;/&gt;)</strong> and copy the <code>firebaseConfig</code> object.</li>
+            </ol>
+          </div>
+
+          <form id="form-firebase-config">
+            <div class="form-group">
+              <label class="form-label">Paste Firebase Config (JSON or JavaScript Object)</label>
+              <textarea class="form-control" id="cfg-paste-json" rows="3" placeholder='Paste { apiKey: "...", authDomain: "...", projectId: "...", appId: "..." }' style="font-family:var(--font-mono); font-size:0.75rem;"></textarea>
+            </div>
+
+            <div style="text-align:center; margin:0.375rem 0; font-size:0.75rem; color:var(--text-muted);">— OR ENTER MANUALLY —</div>
+
+            <div class="form-row" style="gap:0.5rem;">
+              <div class="form-group" style="flex:1;">
+                <label class="form-label" style="font-size:0.75rem;">API Key</label>
+                <input type="text" class="form-control" id="cfg-api-key" value="${curConfig.apiKey || ''}" placeholder="AIzaSy..." />
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label class="form-label" style="font-size:0.75rem;">Project ID</label>
+                <input type="text" class="form-control" id="cfg-project-id" value="${curConfig.projectId || ''}" placeholder="my-school-app" />
+              </div>
+            </div>
+
+            <div class="form-row" style="gap:0.5rem;">
+              <div class="form-group" style="flex:1;">
+                <label class="form-label" style="font-size:0.75rem;">Auth Domain</label>
+                <input type="text" class="form-control" id="cfg-auth-domain" value="${curConfig.authDomain || ''}" placeholder="my-school-app.firebaseapp.com" />
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label class="form-label" style="font-size:0.75rem;">App ID</label>
+                <input type="text" class="form-control" id="cfg-app-id" value="${curConfig.appId || ''}" placeholder="1:12345:web:abcdef" />
+              </div>
+            </div>
+
+            <div style="display:flex; gap:0.5rem; margin-top:0.75rem;">
+              <button type="submit" class="btn-primary" style="flex:1;">Save & Connect</button>
+              ${curConfig.apiKey ? `<button type="button" class="btn-secondary" id="btn-clear-cfg" style="color:var(--danger);">Clear</button>` : ''}
+            </div>
+          </form>
+        </div>
+      `;
+    }
+
+    const modalHTML = `
+      <div class="modal-dialog" style="max-width:460px;">
+        <div class="modal-header">
+          <div>
+            <h2 class="modal-title" style="display:flex; align-items:center; gap:0.375rem;">
+              <span>☁️</span> Cloud Account & Sync
+            </h2>
+            <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:2px;">
+              Persistent cloud storage for Google Sites embeds & iOS
+            </div>
+          </div>
+          <button class="modal-close-btn" id="modal-close">✕</button>
+        </div>
+        <div class="modal-body" style="padding-top:0.5rem;">
+          ${bodyHTML}
+        </div>
+      </div>
+    `;
+
+    openModalHTML(modalHTML, dialog => {
+      // Helper: display alert message
+      const showAlert = (msg, isError = true) => {
+        const box = dialog.querySelector('#auth-alert-message');
+        if (!box) return;
+        box.style.display = 'block';
+        box.style.background = isError ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)';
+        box.style.color = isError ? 'var(--danger)' : 'var(--success)';
+        box.style.border = isError ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)';
+        box.textContent = msg;
+      };
+
+      // Tab Switcher
+      dialog.querySelectorAll('.auth-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.getAttribute('data-target-tab');
+          dialog.querySelectorAll('.auth-tab-btn').forEach(b => b.classList.remove('active'));
+          dialog.querySelectorAll('.auth-pane').forEach(p => p.classList.remove('active'));
+          btn.classList.add('active');
+          dialog.querySelector(`#${target}`)?.classList.add('active');
+        });
+      });
+
+      // Authenticated User Handlers
+      dialog.querySelector('#btn-modal-force-sync')?.addEventListener('click', async () => {
+        const btn = dialog.querySelector('#btn-modal-force-sync');
+        btn.textContent = '⏳ Syncing...';
+        btn.disabled = true;
+        try {
+          await FirebaseSyncService.forceSyncNow();
+          showToast('Cloud sync complete!', 'success');
+          closeModal();
+        } catch (e) {
+          alert('Sync failed: ' + e.message);
+          btn.textContent = '🔄 Sync Cloud Now';
+          btn.disabled = false;
+        }
+      });
+
+      dialog.querySelector('#btn-modal-edit-profile')?.addEventListener('click', () => {
+        closeModal();
+        openProfileModal();
+      });
+
+      dialog.querySelector('#btn-modal-view-config')?.addEventListener('click', () => {
+        openAccountSyncModal('config');
+      });
+
+      dialog.querySelector('#btn-modal-signout')?.addEventListener('click', async () => {
+        if (confirm('Sign out from Cloud Sync? Local changes will remain in browser memory.')) {
+          await FirebaseSyncService.signOut();
+          showToast('Signed out from Cloud', 'info');
+          closeModal();
+        }
+      });
+
+      // Sign In Form Handler
+      const formSignIn = dialog.querySelector('#form-signin');
+      formSignIn?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = dialog.querySelector('#signin-email').value.trim();
+        const password = dialog.querySelector('#signin-password').value;
+        const btn = dialog.querySelector('#btn-submit-signin');
+        btn.textContent = 'Signing in...';
+        btn.disabled = true;
+
+        try {
+          await FirebaseSyncService.signIn(email, password);
+          showToast('Signed in successfully! Cloud sync connected.', 'success');
+          closeModal();
+        } catch (err) {
+          showAlert(err.message || 'Sign in failed.', true);
+          btn.textContent = 'Sign In & Sync';
+          btn.disabled = false;
+        }
+      });
+
+      // Sign Up Form Handler
+      const formSignUp = dialog.querySelector('#form-signup');
+      formSignUp?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = dialog.querySelector('#signup-name').value.trim();
+        const email = dialog.querySelector('#signup-email').value.trim();
+        const password = dialog.querySelector('#signup-password').value;
+        const confirmPw = dialog.querySelector('#signup-password-confirm').value;
+        const btn = dialog.querySelector('#btn-submit-signup');
+
+        if (password !== confirmPw) {
+          showAlert('Passwords do not match.', true);
+          return;
+        }
+
+        btn.textContent = 'Creating account...';
+        btn.disabled = true;
+
+        try {
+          await FirebaseSyncService.signUp(email, password, name);
+          store.updateSettings({ studentName: name, isProfileConfigured: true });
+          showToast('Account created! Data now syncing with Cloud.', 'success');
+          closeModal();
+        } catch (err) {
+          showAlert(err.message || 'Registration failed.', true);
+          btn.textContent = 'Create Free Account & Sync';
+          btn.disabled = false;
+        }
+      });
+
+      // Forgot Password Handler
+      dialog.querySelector('#link-forgot-pw')?.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const email = dialog.querySelector('#signin-email')?.value.trim();
+        if (!email) {
+          showAlert('Please enter your email address in the field above first.', true);
+          return;
+        }
+        try {
+          await FirebaseSyncService.sendPasswordReset(email);
+          showAlert(`Password reset link sent to ${email}! Check your inbox.`, false);
+        } catch (err) {
+          showAlert(err.message || 'Could not send reset link.', true);
+        }
+      });
+
+      // Anonymous / Guest Login Handler
+      dialog.querySelector('#btn-guest-login')?.addEventListener('click', async () => {
+        const btn = dialog.querySelector('#btn-guest-login');
+        btn.textContent = 'Connecting guest session...';
+        btn.disabled = true;
+        try {
+          await FirebaseSyncService.signInAnonymously();
+          showToast('Guest cloud session activated!', 'success');
+          closeModal();
+        } catch (err) {
+          showAlert(err.message || 'Guest sign-in failed. Make sure Anonymous auth is enabled in Firebase Console.', true);
+          btn.textContent = '⚡ Continue as Anonymous Guest';
+          btn.disabled = false;
+        }
+      });
+
+      // Firebase Config Form Handler
+      const configForm = dialog.querySelector('#form-firebase-config');
+      const pasteJson = dialog.querySelector('#cfg-paste-json');
+
+      pasteJson?.addEventListener('input', () => {
+        const raw = pasteJson.value.trim();
+        if (!raw) return;
+        try {
+          // Clean possible js assignment e.g. const firebaseConfig = { ... };
+          let cleanStr = raw;
+          if (cleanStr.includes('=')) {
+            cleanStr = cleanStr.slice(cleanStr.indexOf('=') + 1);
+          }
+          if (cleanStr.endsWith(';')) {
+            cleanStr = cleanStr.slice(0, -1);
+          }
+          cleanStr = cleanStr.trim();
+
+          // Try relaxed JSON or Function parse
+          let parsed;
+          try {
+            parsed = JSON.parse(cleanStr);
+          } catch (jsonErr) {
+            parsed = (new Function(`return ${cleanStr}`))();
+          }
+
+          if (parsed && typeof parsed === 'object') {
+            if (parsed.apiKey) dialog.querySelector('#cfg-api-key').value = parsed.apiKey;
+            if (parsed.projectId) dialog.querySelector('#cfg-project-id').value = parsed.projectId;
+            if (parsed.authDomain) dialog.querySelector('#cfg-auth-domain').value = parsed.authDomain;
+            if (parsed.appId) dialog.querySelector('#cfg-app-id').value = parsed.appId;
+            showAlert('Config recognized! Click "Save & Connect" below.', false);
+          }
+        } catch (e) {
+          // Ignore partial typing errors
+        }
+      });
+
+      configForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const apiKey = dialog.querySelector('#cfg-api-key').value.trim();
+        const projectId = dialog.querySelector('#cfg-project-id').value.trim();
+        const authDomain = dialog.querySelector('#cfg-auth-domain').value.trim() || `${projectId}.firebaseapp.com`;
+        const appId = dialog.querySelector('#cfg-app-id').value.trim();
+
+        if (!apiKey || !projectId) {
+          showAlert('Please provide at least an API Key and Project ID.', true);
+          return;
+        }
+
+        const newConfig = {
+          apiKey,
+          projectId,
+          authDomain,
+          appId,
+          storageBucket: `${projectId}.appspot.com`
+        };
+
+        const success = FirebaseSyncService.saveConfig(newConfig);
+        if (success) {
+          showToast('Firebase configuration saved!', 'success');
+          openAccountSyncModal('signin');
+        } else {
+          showAlert('Saved keys, but could not connect to Firebase SDK. Check console for details.', true);
+        }
+      });
+
+      dialog.querySelector('#btn-clear-cfg')?.addEventListener('click', () => {
+        if (confirm('Clear saved Firebase configuration?')) {
+          FirebaseSyncService.saveConfig(null);
+          showToast('Firebase configuration removed', 'info');
+          closeModal();
+        }
+      });
+    });
+  }
+
   // Quick Add Universal Modal (Press Q or Click + Add)
   function openQuickAddModal() {
     const html = `
@@ -2619,7 +3400,13 @@
               </div>
             </div>
 
-            <div class="modal-footer" style="padding-left:0; padding-right:0; padding-bottom:0; background:none;">
+            <div style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border-default); display:flex; justify-content:space-between; align-items:center;">
+              <button type="button" class="btn-secondary" id="btn-profile-manage-cloud" style="font-size:0.75rem;">
+                ☁️ Cloud Account & Sync
+              </button>
+            </div>
+
+            <div class="modal-footer" style="padding-left:0; padding-right:0; padding-bottom:0; background:none; margin-top:0.75rem;">
               <button type="button" class="btn-secondary" id="modal-cancel">Cancel</button>
               <button type="submit" class="btn-primary">Save Profile</button>
             </div>
@@ -2630,6 +3417,11 @@
 
     openModalHTML(html, dialog => {
       dialog.querySelector('#modal-cancel')?.addEventListener('click', closeModal);
+
+      dialog.querySelector('#btn-profile-manage-cloud')?.addEventListener('click', () => {
+        closeModal();
+        openAccountSyncModal();
+      });
 
       let chosenColor = curColor;
 
