@@ -1,6 +1,7 @@
 name: AcademiaPro
 options:
   bundleIdPrefix: com.academiapro
+  xcodeVersion: "1540"
 targets:
   AcademiaPro:
     type: application
