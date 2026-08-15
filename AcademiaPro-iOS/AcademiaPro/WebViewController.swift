@@ -4,33 +4,45 @@ import UserNotifications
 
 class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private var webView: WKWebView!
+    private var isDarkMode: Bool = false {
+        didSet {
+            setNeedsStatusBarAppearanceUpdate()
+            updateBackgroundTheme()
+        }
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        isDarkMode = (traitCollection.userInterfaceStyle == .dark)
+        updateBackgroundTheme()
+        
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.dataDetectorTypes = []
-        
-        // Enable localStorage persistence
         config.websiteDataStore = WKWebsiteDataStore.default()
         
-        // Inject safe area CSS
+        // Inject Safe Area CSS Variables (Dynamic Island, Notch, Home Bar)
         let safeAreaScript = WKUserScript(
             source: """
-            document.documentElement.style.setProperty('--sat', 'env(safe-area-inset-top)');
-            document.documentElement.style.setProperty('--sab', 'env(safe-area-inset-bottom)');
-            document.documentElement.style.setProperty('--sal', 'env(safe-area-inset-left)');
-            document.documentElement.style.setProperty('--sar', 'env(safe-area-inset-right)');
-            document.body.style.paddingTop = 'env(safe-area-inset-top)';
-            document.body.style.paddingBottom = 'env(safe-area-inset-bottom)';
+            (function() {
+                function updateSafeAreaVars() {
+                    document.documentElement.style.setProperty('--sat', 'env(safe-area-inset-top, 0px)');
+                    document.documentElement.style.setProperty('--sab', 'env(safe-area-inset-bottom, 0px)');
+                    document.documentElement.style.setProperty('--sal', 'env(safe-area-inset-left, 0px)');
+                    document.documentElement.style.setProperty('--sar', 'env(safe-area-inset-right, 0px)');
+                }
+                updateSafeAreaVars();
+                window.addEventListener('resize', updateSafeAreaVars);
+                window.addEventListener('orientationchange', updateSafeAreaVars);
+            })();
             """,
             injectionTime: .atDocumentEnd,
             forMainFrameOnly: true
         )
         config.userContentController.addUserScript(safeAreaScript)
         
-        // Inject JS bridge
+        // Inject Native Bridge
         let bridgeScript = WKUserScript(
             source: """
             window.AcademiaProNative = {
@@ -48,6 +60,9 @@ class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, W
               },
               haptic: function(type) {
                 window.webkit.messageHandlers.requestHaptic.postMessage({ type: type });
+              },
+              setTheme: function(theme) {
+                window.webkit.messageHandlers.setTheme.postMessage({ theme: theme });
               }
             };
             """,
@@ -60,6 +75,7 @@ class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, W
         config.userContentController.add(self, name: "cancelNotification")
         config.userContentController.add(self, name: "cancelAllNotifications")
         config.userContentController.add(self, name: "requestHaptic")
+        config.userContentController.add(self, name: "setTheme")
         
         webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
@@ -67,10 +83,8 @@ class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, W
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.isOpaque = false
-        webView.backgroundColor = UIColor(red: 0.973, green: 0.980, blue: 0.988, alpha: 1.0) // #f8fafc
         webView.scrollView.bounces = false
         
-        // Respect safe areas but fill screen
         view.addSubview(webView)
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -80,22 +94,33 @@ class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, W
         ])
         
         loadLocalHTML()
-        
-        // Set initial theme
-        let isDark = traitCollection.userInterfaceStyle == .dark
-        let theme = isDark ? "dark" : "light"
-        webView.evaluateJavaScript("document.documentElement.setAttribute('data-theme', '\(theme)')")
+        syncThemeWithWeb()
+    }
+    
+    private func updateBackgroundTheme() {
+        let bgColor = isDarkMode 
+            ? UIColor(red: 10/255.0, green: 14/255.0, blue: 23/255.0, alpha: 1.0)
+            : UIColor(red: 248/255.0, green: 250/255.0, blue: 252/255.0, alpha: 1.0)
+        view.backgroundColor = bgColor
+        if webView != nil {
+            webView.backgroundColor = bgColor
+            webView.scrollView.backgroundColor = bgColor
+        }
     }
     
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        let isDark = traitCollection.userInterfaceStyle == .dark
-        let theme = isDark ? "dark" : "light"
-        webView.evaluateJavaScript("document.documentElement.setAttribute('data-theme', '\(theme)')")
+        isDarkMode = (traitCollection.userInterfaceStyle == .dark)
+        syncThemeWithWeb()
+    }
+    
+    private func syncThemeWithWeb() {
+        let theme = isDarkMode ? "dark" : "light"
+        webView?.evaluateJavaScript("document.documentElement.setAttribute('data-theme', '\(theme)')")
     }
     
     override var preferredStatusBarStyle: UIStatusBarStyle {
-        return .darkContent
+        return isDarkMode ? .lightContent : .darkContent
     }
     
     override var prefersStatusBarHidden: Bool {
@@ -184,6 +209,10 @@ class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, W
             default:
                 break
             }
+        } else if message.name == "setTheme" {
+            guard let dict = message.body as? [String: Any],
+                  let theme = dict["theme"] as? String else { return }
+            self.isDarkMode = (theme == "dark")
         }
     }
 }

@@ -1322,6 +1322,9 @@
 
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
+    if (window.AcademiaProNative && typeof window.AcademiaProNative.setTheme === 'function') {
+      window.AcademiaProNative.setTheme(theme);
+    }
     const icon = elements.themeToggleBtn ? elements.themeToggleBtn.querySelector('.theme-icon') : null;
     if (icon) {
       icon.innerHTML = theme === 'dark' 
@@ -1568,13 +1571,13 @@
         <div class="header-actions">
           <button class="btn-primary" id="dash-quick-add-task">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>+ Add Task</span>
+            <span>Add Task</span>
           </button>
           <button class="btn-secondary" id="dash-quick-add-exam">
-            <span>+ Add Exam</span>
+            <span>Add Exam</span>
           </button>
           <button class="btn-secondary" id="dash-quick-add-class">
-            <span>+ Add Course</span>
+            <span>Add Course</span>
           </button>
         </div>
       </div>
@@ -1996,7 +1999,7 @@
           </div>
           <button class="btn-primary" id="btn-create-assignment">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>+ Add Task</span>
+            <span>Add Task</span>
           </button>
         </div>
       </div>
@@ -2132,7 +2135,7 @@
         <div class="header-actions">
           <button class="btn-primary" id="btn-create-exam">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>+ Schedule Exam</span>
+            <span>Schedule Exam</span>
           </button>
         </div>
       </div>
@@ -2388,7 +2391,7 @@
         <div class="header-actions">
           <button class="btn-primary" id="btn-add-schedule-slot">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>+ Add Class Slot</span>
+            <span>Add Class Slot</span>
           </button>
         </div>
       </div>
@@ -2593,7 +2596,7 @@
         <div class="header-actions">
           <button class="btn-primary" id="btn-add-class">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>+ Add Course</span>
+            <span>Add Course</span>
           </button>
         </div>
       </div>
